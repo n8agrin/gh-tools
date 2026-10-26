@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "2 to 4 plain sentences, at most 80 words, on what the change does and what that means outside the file"
+          }
+        },
+        "required": [
+          "file",
+          "summary"
+        ]
+      }
+    }
+  },
+  "required": [
+    "files"
+  ]
+}

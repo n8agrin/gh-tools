@@ -1,0 +1,45 @@
+import { expect, test } from 'bun:test';
+import { applyVerdicts, excerpt, site, verifyTaste } from '../src/taste';
+
+const base = 'https://github.com/o/r/blob/aaaaaaa';
+const q = (question: string, url: string) => ({ question, why: 'w', job: 'store a limit', evidence: [{ label: 'Base: x', url }] });
+const taste = () => ({
+  lenses: [
+    { lens: 'consistency', note: '', questions: [q('keep me', `${base}/a.ts#L3`), q('wrong comparison', `${base}/routes/enforce.ts#L2-L4`)] },
+    { lens: 'simple_first', note: '', questions: [q('overstated', `${base}/a.ts#L1`)] },
+  ],
+  surface: [],
+});
+
+test('reads a cited GitHub line range', () => {
+  expect(site(`${base}/app/routes/x%20y.tsx#L10-L14`)).toEqual({ sha: 'aaaaaaa', path: 'app/routes/x y.tsx', start: 10, end: 14 });
+  expect(site('https://example.com/x')).toBeNull();
+  expect(excerpt('a\nb\nc\nd', 2, 2, 1)).toBe('    1  a\n    2  b\n    3  c');
+});
+
+test('the skeptic sees the cited code, and its verdicts keep, drop and reword', async () => {
+  let seen = '';
+  const out = await verifyTaste(taste(), {
+    read: async (_sha, path) => (path === 'routes/enforce.ts' ? 'l1\nif (overLimit) throw\nl3\nl4' : 'x\ny\nz'),
+    ask: async (text) => {
+      seen = text;
+      return {
+        verdicts: [
+          { id: 'consistency.2', verdict: 'drop', reason: 'the route enforces the limit; the PR stores it' },
+          { id: 'simple_first.1', verdict: 'reword', reason: 'there is one caller, not two', question: 'better question' },
+        ],
+      };
+    },
+  });
+  expect(seen).toContain('## consistency.2');
+  expect(seen).toContain('if (overLimit) throw');
+  expect(out.lenses[0].questions.map((x: any) => x.question)).toEqual(['keep me']);
+  expect(out.lenses[1].questions[0]).toMatchObject({ question: 'better question', reworded: 'there is one caller, not two' });
+  expect(out.dropped).toEqual([{ question: 'wrong comparison', reason: 'the route enforces the limit; the PR stores it' }]);
+});
+
+test('a finding with no verdict is kept', () => {
+  const out = applyVerdicts(taste(), []);
+  expect(out.lenses.flatMap((l: any) => l.questions).length).toBe(3);
+  expect(out.dropped).toEqual([]);
+});

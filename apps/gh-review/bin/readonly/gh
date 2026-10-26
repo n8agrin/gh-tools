@@ -1,0 +1,23 @@
+#!/bin/bash
+# gh for review runs: reads only. Review runs put this first on PATH, so nothing they start
+# (claude, skills, python scripts) can comment on, review, label or edit someone's PR.
+self_dir=$(cd "$(dirname "$0")" && pwd)
+real=$(PATH=$(echo "$PATH" | tr ':' '\n' | grep -vxF "$self_dir" | paste -sd: -) command -v gh)
+block() { echo "gh-review: blocked a GitHub write ($*). Review runs are read-only." >&2; exit 1; }
+
+case "$1 $2" in
+  "pr view"|"pr diff"|"pr list"|"pr checks"|"pr status"|"issue view"|"issue list"|"repo view"|"run view"|"run list"|"auth status"|"search "*|"--version "*|"api "*) ;;
+  *) block "$*" ;;
+esac
+
+if [ "$1" = api ]; then
+  args=" $* "
+  # Reading the API is fine. A method other than GET, or any field flags outside graphql, means a write.
+  if echo "$args" | grep -qiE -- ' (-X|--method)[ =]?(POST|PUT|PATCH|DELETE)'; then block "$*"; fi
+  if [ "$2" = graphql ]; then
+    echo "$args" | grep -qi 'mutation' && block "$*"
+  elif echo "$args" | grep -qE -- ' (-f|-F|--field|--raw-field|--input)[ =]' && ! echo "$args" | grep -qiE -- ' (-X|--method)[ =]?GET '; then
+    block "$*"
+  fi
+fi
+exec "$real" "$@"

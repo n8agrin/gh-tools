@@ -1,0 +1,12 @@
+#!/bin/sh
+# Builds the app, boots a simulator and runs it with your gh token, so there's nothing to paste.
+# Pass a simulator name to pick one: bin/sim "iPad Pro 11-inch (M5)"
+set -e
+cd "$(dirname "$0")/.."
+DEVICE="${1:-iPhone 18 Pro}"
+DD="${TMPDIR:-/tmp}/gh-review-ios-dd"
+xcrun simctl boot "$DEVICE" 2>/dev/null || true
+open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true
+xcodebuild -quiet -project GHReview.xcodeproj -scheme GHReview -destination "platform=iOS Simulator,name=$DEVICE" -derivedDataPath "$DD" build
+xcrun simctl install "$DEVICE" "$DD/Build/Products/Debug-iphonesimulator/GHReview.app"
+SIMCTL_CHILD_GH_TOKEN="$(gh auth token)" xcrun simctl launch --terminate-running-process "$DEVICE" com.n8agrin.gh-review

@@ -1,0 +1,15 @@
+{
+  "name": "gh-tools",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "bun run --cwd apps/gh-review start",
+    "dev": "bun run --cwd apps/gh-review dev",
+    "queue": "bun run --cwd apps/gh-review queue",
+    "demo": "bun run --cwd apps/gh-review demo",
+    "test": "bun run --filter '*' test",
+    "stat": "bun run --cwd apps/gh-stat start"
+  }
+}

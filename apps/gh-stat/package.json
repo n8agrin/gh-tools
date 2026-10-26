@@ -1,0 +1,7 @@
+{
+  "name": "gh-stat",
+  "private": true,
+  "description": "Weekly GitHub PR stats board",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}

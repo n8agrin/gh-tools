@@ -1,0 +1,3 @@
+# A bare `bun test` here finds every app's tests, so it needs their setup too.
+[test]
+preload = ["./apps/gh-review/test/setup.ts"]

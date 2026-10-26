@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "properties": {
+    "lenses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lens": {
+            "type": "string",
+            "enum": [
+              "consistency",
+              "simple_first",
+              "right_sized"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "one line: what you compared against, or why the lens doesn't apply"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "url"
+                    ]
+                  },
+                  "description": "links to the PR's own code (label starting 'PR:') and to prior art (label starting 'Base:')"
+                },
+                "job": {
+                  "type": "string",
+                  "description": "one clause naming the job both the PR code and the prior art do"
+                },
+                "siblings": {
+                  "type": "string",
+                  "description": "how the sibling sites that do this job handle it, with a count, e.g. \"3 of 4 tools in mcp/tools declare their own schema\""
+                },
+                "author_reason": {
+                  "type": "string",
+                  "description": "the reason the PR code comments or description give for this choice, quoted briefly; empty when none"
+                },
+                "file": {
+                  "type": "string",
+                  "description": "the PR file the question is about, repo-relative as in the diff"
+                },
+                "lines": {
+                  "type": "string",
+                  "description": "line range at the PR head, e.g. 40-52"
+                }
+              },
+              "required": [
+                "question",
+                "why",
+                "job",
+                "evidence",
+                "siblings",
+                "author_reason",
+                "file",
+                "lines"
+              ]
+            }
+          }
+        },
+        "required": [
+          "lens",
+          "note",
+          "questions"
+        ]
+      }
+    }
+  },
+  "required": [
+    "lenses"
+  ]
+}

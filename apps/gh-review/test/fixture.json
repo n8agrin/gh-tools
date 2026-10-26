@@ -1,0 +1,243 @@
+{
+  "data": {
+    "viewer": {
+      "login": "n8agrin"
+    },
+    "search": {
+      "nodes": [
+        {
+          "id": "PR_63901",
+          "number": 63901,
+          "title": "Fix pivot totals when a column is hidden",
+          "url": "https://github.com/acme/app/pull/63901",
+          "isDraft": false,
+          "createdAt": "2026-09-27T12:09:09.366Z",
+          "updatedAt": "2026-09-28T15:09:09.366Z",
+          "additions": 42,
+          "deletions": 8,
+          "changedFiles": 3,
+          "reviewDecision": "REVIEW_REQUIRED",
+          "author": {
+            "login": "jamie"
+          },
+          "repository": {
+            "nameWithOwner": "acme/app"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "comments": {
+            "totalCount": 2
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          },
+          "reviewRequests": {
+            "nodes": [
+              {
+                "requestedReviewer": {
+                  "__typename": "User",
+                  "login": "n8agrin"
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "nodes": [
+              {
+                "createdAt": "2026-09-27T14:09:09.366Z",
+                "requestedReviewer": {
+                  "__typename": "User",
+                  "login": "n8agrin"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "PR_63877",
+          "number": 63877,
+          "title": "Move workbook autosave onto the job queue",
+          "url": "https://github.com/acme/app/pull/63877",
+          "isDraft": false,
+          "createdAt": "2026-09-28T18:09:09.366Z",
+          "updatedAt": "2026-09-29T06:09:09.366Z",
+          "additions": 812,
+          "deletions": 390,
+          "changedFiles": 27,
+          "reviewDecision": "REVIEW_REQUIRED",
+          "author": {
+            "login": "priya"
+          },
+          "repository": {
+            "nameWithOwner": "acme/app"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "perf"
+              }
+            ]
+          },
+          "comments": {
+            "totalCount": 0
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "FAILURE"
+                  }
+                }
+              }
+            ]
+          },
+          "reviewRequests": {
+            "nodes": [
+              {
+                "requestedReviewer": {
+                  "__typename": "Team",
+                  "slug": "frontend"
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "nodes": [
+              {
+                "createdAt": "2026-09-28T20:09:09.366Z",
+                "requestedReviewer": {
+                  "__typename": "Team",
+                  "slug": "frontend"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "PR_1204",
+          "number": 1204,
+          "title": "Document the new embed SSO flow",
+          "url": "https://github.com/acme/docs/pull/1204",
+          "isDraft": true,
+          "createdAt": "2026-09-29T11:09:09.366Z",
+          "updatedAt": "2026-09-29T14:39:09.366Z",
+          "additions": 120,
+          "deletions": 4,
+          "changedFiles": 2,
+          "reviewDecision": "REVIEW_REQUIRED",
+          "author": {
+            "login": "sam"
+          },
+          "repository": {
+            "nameWithOwner": "acme/docs"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "comments": {
+            "totalCount": 0
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "PENDING"
+                  }
+                }
+              }
+            ]
+          },
+          "reviewRequests": {
+            "nodes": [
+              {
+                "requestedReviewer": {
+                  "__typename": "User",
+                  "login": "n8agrin"
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "nodes": [
+              {
+                "createdAt": "2026-09-29T13:09:09.366Z",
+                "requestedReviewer": {
+                  "__typename": "User",
+                  "login": "n8agrin"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "PR_63910",
+          "number": 63910,
+          "title": "Bump vitest to 3.2",
+          "url": "https://github.com/acme/app/pull/63910",
+          "isDraft": false,
+          "createdAt": "2026-09-29T13:09:09.366Z",
+          "updatedAt": "2026-09-29T15:39:09.366Z",
+          "additions": 14,
+          "deletions": 14,
+          "changedFiles": 2,
+          "reviewDecision": "APPROVED",
+          "author": {
+            "login": "dependabot"
+          },
+          "repository": {
+            "nameWithOwner": "acme/app"
+          },
+          "labels": {
+            "nodes": []
+          },
+          "comments": {
+            "totalCount": 0
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          },
+          "reviewRequests": {
+            "nodes": [
+              {
+                "requestedReviewer": {
+                  "__typename": "Team",
+                  "slug": "eng"
+                }
+              }
+            ]
+          },
+          "timelineItems": {
+            "nodes": [
+              {
+                "createdAt": "2026-09-29T15:09:09.366Z",
+                "requestedReviewer": {
+                  "__typename": "Team",
+                  "slug": "eng"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

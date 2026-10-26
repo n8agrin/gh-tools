@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "color": { "type": "string", "enum": ["green", "yellow", "red"] },
+    "reason": { "type": "string", "description": "one short line, without the color word" },
+    "flag": { "type": "string", "description": "the feature flag the change sits behind; empty when none" },
+    "flag_defaults_off": { "type": "boolean" },
+    "all_behind_flag": { "type": "boolean", "description": "every changed non-test line runs only when the flag is on" },
+    "no_runtime_change": { "type": "boolean", "description": "only docs, comments or tests changed" }
+  },
+  "required": ["color", "reason", "flag", "flag_defaults_off", "all_behind_flag", "no_runtime_change"]
+}

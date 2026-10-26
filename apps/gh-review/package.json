@@ -1,0 +1,12 @@
+{
+  "name": "gh-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
+    "queue": "bun src/cli.ts",
+    "demo": "GH_REVIEW_FIXTURE=test/fixture.json bun src/server.ts",
+    "test": "bun test"
+  }
+}

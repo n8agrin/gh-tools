@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "minutes": { "type": "integer", "enum": [5, 10, 20, 45, 90] },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "color": { "type": "string", "enum": ["green", "yellow", "red"] },
+          "note": { "type": "string" },
+          "routine": { "type": "boolean" }
+        },
+        "required": ["file", "color", "note", "routine"]
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "lines": { "type": "string", "description": "line range at the PR head, e.g. 40-52" },
+          "kind": { "type": "string", "enum": ["check", "test-gap"] },
+          "note": { "type": "string" }
+        },
+        "required": ["file", "lines", "kind", "note"]
+      }
+    }
+  },
+  "required": ["minutes", "files", "notes"]
+}

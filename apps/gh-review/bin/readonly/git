@@ -1,0 +1,27 @@
+#!/bin/bash
+# git for review runs: never pushes, and only changes files inside gh-review's throwaway worktrees.
+self_dir=$(cd "$(dirname "$0")" && pwd)
+real=$(PATH=$(echo "$PATH" | tr ':' '\n' | grep -vxF "$self_dir" | paste -sd: -) command -v git)
+block() { echo "gh-review: blocked 'git $*'. Review runs are read-only outside their worktree." >&2; exit 1; }
+
+# Skip global options like -C <dir> or -c k=v to find the subcommand.
+dir=.
+args=("$@")
+i=0
+while [ $i -lt ${#args[@]} ]; do
+  case "${args[$i]}" in
+    -C) dir="${args[$((i+1))]}"; i=$((i+2)) ;;
+    -c) i=$((i+2)) ;;
+    -*) i=$((i+1)) ;;
+    *) break ;;
+  esac
+done
+sub="${args[$i]}"
+
+case "$sub" in
+  push|send-email|request-pull) block "$*" ;;
+  checkout|switch|reset|rebase|merge|commit|cherry-pick|revert|pull|stash|am|apply|clean|restore|rm|mv|branch|tag|add)
+    top=$(cd "$dir" 2>/dev/null && pwd -P)
+    case "$top/" in "$GH_REVIEW_WORKTREES"/*) ;; *) block "$*" ;; esac ;;
+esac
+exec "$real" "$@"

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PR</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/pr.css" />
+  <script>try { const t = localStorage.getItem('prTheme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body class="pr-page">
+  <header>
+    <a href="/" id="back" title="Back to the queue (esc)">← Queue</a>
+    <span id="ref" class="ref mono"></span>
+    <span id="htitle"></span>
+    <span class="hright">
+      <span id="pos"></span>
+      <a id="github" class="gh" target="_blank" rel="noreferrer" title="Open on GitHub (o)">GitHub ↗</a>
+      <button id="theme" type="button" title="Theme (t)"></button>
+    </span>
+  </header>
+  <div id="split">
+    <aside id="side" aria-label="Files to review"></aside>
+    <div class="grip" id="grip-side" title="Drag to resize · double-click to reset"></div>
+    <main id="page"><div class="empty">Loading…</div></main>
+    <div class="grip" id="grip-run" title="Drag to resize · double-click to reset"></div>
+    <aside id="rundrawer" hidden aria-label="Review run"></aside>
+    <div class="grip" id="grip-chat" title="Drag to resize · double-click to reset"></div>
+    <aside id="chat" hidden aria-label="Chat about this PR">
+      <div class="chat-head"><h2>Ask Claude</h2><button id="chat-stop" type="button" hidden>Stop</button><button id="chat-clear" type="button" hidden title="Forget this thread and start over">Clear</button><button id="chat-close" type="button" title="Hide (⇧C)">✕</button></div>
+      <div id="chat-log"></div>
+      <textarea id="chat-input" rows="3" placeholder="Ask about this PR"></textarea>
+      <div class="chat-keys"><kbd>⏎</kbd> send · <kbd>⇧⏎</kbd> new line · <kbd>esc</kbd> back to the page</div>
+    </aside>
+  </div>
+  <footer id="keys"><button id="runbtn" type="button" title="Run details (⇧D)"></button><span id="status"></span><span class="ks"><span><kbd>j</kbd><kbd>k</kbd>file</span><span><kbd>space</kbd>reviewed</span><span><kbd>n</kbd>next unread</span><span><kbd>b</kbd>brief</span><span><kbd>c</kbd>ask Claude</span><span><kbd>⇧S</kbd>submit</span><span><kbd>⇧D</kbd>run</span><span><kbd>[</kbd><kbd>]</kbd>PR</span><span><kbd>e</kbd>done</span><span><kbd>g</kbd><kbd>y</kbd><kbd>r</kbd>color</span><span><kbd>esc</kbd>queue</span><span><kbd>?</kbd>all keys</span></span></footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
+  <script src="/pr.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs the core tests with only the Command Line Tools installed. With Xcode, plain `swift test` works too.
+# LIVE=1 also reads your real queue from GitHub through `gh auth token` (read-only).
+cd "$(dirname "$0")/.." || exit 1
+F=/Library/Developer/CommandLineTools/Library/Developer
+[ "$LIVE" = 1 ] && export GH_TOKEN="$(gh auth token)"
+if [ -d "$F/Frameworks/Testing.framework" ] && ! xcode-select -p | grep -q Xcode.app; then
+  exec swift test -Xswiftc -F -Xswiftc "$F/Frameworks" -Xlinker -F -Xlinker "$F/Frameworks" \
+    -Xlinker -rpath -Xlinker "$F/Frameworks" -Xlinker -rpath -Xlinker "$F/usr/lib" "$@"
+fi
+exec swift test "$@"

@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "gh-review", "runtimeExecutable": "bun", "runtimeArgs": ["apps/gh-review/src/server.ts"], "port": 4790 },
+    { "name": "gh-review-demo", "runtimeExecutable": "bun", "runtimeArgs": ["apps/gh-review/src/server.ts"], "port": 4748, "env": { "GH_REVIEW_FIXTURE": "apps/gh-review/test/fixture.json", "PORT": "4748", "GH_REVIEW_HOME": "/tmp/gh-review-demo" } }
+  ]
+}

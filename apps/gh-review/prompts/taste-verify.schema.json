@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "verdict": { "type": "string", "enum": ["keep", "drop", "reword"] },
+          "reason": { "type": "string" },
+          "question": { "type": "string", "description": "the reworded question, only for reword" }
+        },
+        "required": ["id", "verdict", "reason"]
+      }
+    }
+  },
+  "required": ["verdicts"]
+}

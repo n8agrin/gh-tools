@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "verdict": { "type": "string", "enum": ["matches", "gaps", "no description"] },
+    "summary": { "type": "string" },
+    "gaps": { "type": "array", "items": { "type": "object", "properties": { "gap": { "type": "string" }, "where": { "type": "string", "description": "path:line" } }, "required": ["gap", "where"] } },
+    "ui_change": { "type": "boolean" },
+    "has_screenshots": { "type": "boolean" }
+  },
+  "required": ["verdict", "summary", "gaps", "ui_change", "has_screenshots"]
+}

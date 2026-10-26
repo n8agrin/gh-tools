@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "one_liner": { "type": "string" },
+    "steps": { "type": "array", "maxItems": 3, "items": { "type": "object", "properties": { "text": { "type": "string" }, "where": { "type": "string", "description": "path:line at the PR head" } }, "required": ["text", "where"] } }
+  },
+  "required": ["one_liner", "steps"]
+}

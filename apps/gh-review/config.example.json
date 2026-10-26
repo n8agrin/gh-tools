@@ -1,0 +1,65 @@
+{
+  "checkouts": {
+    "owner/repo": "~/src/repo"
+  },
+  "checks": [
+    {
+      "key": "explain",
+      "label": "How this works",
+      "prompt": "prompts/explain.md",
+      "schema": "prompts/explain.schema.json"
+    },
+    {
+      "key": "guide",
+      "label": "Reading guide",
+      "prompt": "prompts/guide.md",
+      "schema": "prompts/guide.schema.json"
+    },
+    {
+      "key": "description",
+      "label": "Description vs change",
+      "prompt": "prompts/description.md",
+      "schema": "prompts/description.schema.json"
+    },
+    {
+      "key": "signal",
+      "label": "Signal",
+      "prompt": "prompts/signal.md",
+      "schema": "prompts/signal.schema.json",
+      "skipOnMine": true
+    },
+    {
+      "key": "check",
+      "label": "Check",
+      "prompt": "prompts/check.md",
+      "schema": "prompts/check.schema.json"
+    },
+    {
+      "key": "taste",
+      "label": "Taste",
+      "prompt": "prompts/taste.md",
+      "schema": "prompts/taste.schema.json"
+    },
+    {
+      "key": "files",
+      "label": "File summaries",
+      "prompt": "prompts/files.md",
+      "schema": "prompts/files.schema.json",
+      "model": "sonnet"
+    }
+  ],
+  "red": [],
+  "actions": [
+    {
+      "key": "s",
+      "label": "Summarize",
+      "command": [
+        "claude",
+        "-p",
+        "--permission-mode",
+        "auto",
+        "Summarize the GitHub PR at {url} for a reviewer: what it changes, why, and what to look at first. Read it with gh. Never write to GitHub."
+      ]
+    }
+  ]
+}

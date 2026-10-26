@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "lines": { "type": "string", "description": "line range at the PR head, e.g. 40-52" },
+          "kind": { "type": "string", "enum": ["check"] },
+          "category": { "type": "string", "enum": ["bug", "perf", "api", "security", "danger"] },
+          "color": { "type": "string", "enum": ["yellow", "red"] },
+          "note": { "type": "string" },
+          "scenario": { "type": "string" }
+        },
+        "required": ["file", "lines", "kind", "category", "color", "note", "scenario"]
+      }
+    }
+  },
+  "required": ["findings"]
+}
