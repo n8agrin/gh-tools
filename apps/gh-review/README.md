@@ -4,18 +4,36 @@ A local page that lists every open PR where someone asked for your review, acros
 
 ## Setup
 
-You need [Bun](https://bun.sh), the GitHub CLI logged in (`gh auth status`), and the [Claude Code](https://claude.com/claude-code) CLI for review runs, chat and actions. Then copy the example config and add your repos:
+You need [Bun](https://bun.sh), the GitHub CLI logged in (`gh auth status`), and the [Claude Code](https://claude.com/claude-code) CLI for review runs, chat and actions. Clone the repo and install from its root:
 
 ```bash
-mkdir -p ~/.gh-review && cp config.example.json ~/.gh-review/config.json
+git clone https://github.com/n8agrin/gh-tools.git
+cd gh-tools
+bun install
 ```
+
+Then copy the example config into your home folder and add your repos under `checkouts` (see Config below):
+
+```bash
+mkdir -p ~/.gh-review
+cp apps/gh-review/config.example.json ~/.gh-review/config.json
+```
+
+In the copy, replace the `"owner/repo": "~/src/repo"` line under `checkouts` with each repo you review and the path to your clone of it, like `"your-org/your-repo": "~/src/your-repo"`. Keep the `checks` list as it is, since Run review only runs the checks your config lists.
+
+## Running it
+
+Run these from the repo root, or the same names from `apps/gh-review`:
 
 ```bash
 bun start          # http://localhost:4790
+bun run dev        # the same, restarting when the code changes
 bun run queue      # the same list in the terminal (--json for scripts)
 bun run demo       # sample data, no GitHub needed
 bun test
 ```
+
+`PORT` picks another port, like `PORT=4800 bun start`. `GH_REVIEW_HOME` moves the data folder away from `~/.gh-review`, and `GH_REVIEW_CONFIG` points at a config file somewhere else. When the server starts without a config it says so in the terminal and runs on the example.
 
 ## Config
 
