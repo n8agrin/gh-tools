@@ -81,6 +81,8 @@ Each PR's page has a Run review button (or `⇧R`). Nothing runs until you press
 
 The PR page follows the PR Page v3 design. A checklist on the left holds the brief, then the files to read in full, then the ones to skim, with the routine files hidden until you ask. The brief has the purpose, the risk with its numbers and a map of the diff, the description next to its gaps, how the change works and the taste questions. Each file opens on its own with the run's notes and its diff, notes sitting under the line they're about. `j`/`k` move through the list, `space` ticks off what you're on and opens the next unread item, `n` jumps to the next unread one, `b` goes back to the brief, `[`/`]` move between PRs, `s` shows a file's diff side by side and `t` switches dark and light. Under each file name is a plain link to that file in the PR on GitHub. In the run's Options you can tick any steps and press Run selected to redo just those, keeping the rest of the run; each brief section also has its own Rerun. What you've ticked is saved in the browser per PR. When everything is ticked, a finish screen offers GitHub, done and Claude.
 
+Each Check or Taste note under a diff line has an Add to review button. It opens a comment on that line with the note's text (and its prior-art link) for you to edit; once added it sits with your other pending comments and goes to GitHub only when you submit your review.
+
 Runs never write to GitHub. The claude runs are denied GitHub write tools, and `bin/readonly/gh` and `bin/readonly/git` sit first on their PATH, so `gh` can only read and `git` can't push or touch anything outside the worktree. Prompts live in `prompts/`; add a check by adding it to `checks` in your config.
 
 ## Your own bug finder

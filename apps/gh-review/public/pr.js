@@ -820,9 +820,30 @@ function commentsAt(path, side, line) {
   return html;
 }
 
-function openDraft(path, side, line, code, text = '', editId = null) {
-  state.draft = { path, side, line, code, text, editId };
+function openDraft(path, side, line, code, text = '', editId = null, from = null) {
+  state.draft = { path, side, line, code, text, editId, from };
   render();
+}
+
+// ——— Callouts into your review ———
+
+// What a callout becomes as a line comment: the note, the failure it describes, and the prior art it cites.
+const noteText = (x) => [x.note, x.scenario, x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+const noteKey = (x) => `${x.kind}:${x.note}`;
+const fromNote = (path, line, key) => state.comments.find((c) => c.path === path && c.line === line && c.from === key);
+
+// A Taste or Check callout under a diff line can become a pending comment on that line, which you edit before it goes in.
+function noteBtn(path, line, x) {
+  const added = fromNote(path, line, noteKey(x));
+  if (added) return `<button class="link nadd" type="button" data-jump="${added.id}" title="Already a pending comment on line ${line}">In your review ✓</button>`;
+  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
+}
+
+function draftFromNote(btn) {
+  const path = btn.dataset.notePath;
+  const line = Number(btn.dataset.noteLine);
+  const code = state.diff?.[path]?.hunks.flatMap((h) => h.lines).find((l) => l[0] !== '-' && l[2] === line)?.[3] ?? '';
+  openDraft(path, 'RIGHT', line, code, btn.dataset.noteText, null, btn.dataset.noteKey);
 }
 
 function saveDraft() {
@@ -830,8 +851,9 @@ function saveDraft() {
   if (!d) return;
   const text = d.text.trim();
   state.draft = null;
+  const from = d.from ?? state.comments.find((c) => c.id === d.editId)?.from;
   if (d.editId) state.comments = state.comments.filter((c) => c.id !== d.editId);
-  if (text) state.comments.push({ id: d.editId ?? Date.now(), path: d.path, side: d.side, line: d.line, code: d.code, text, sha: state.pr.headSha });
+  if (text) state.comments.push({ id: d.editId ?? Date.now(), path: d.path, side: d.side, line: d.line, code: d.code, text, sha: state.pr.headSha, ...(from ? { from } : {}) });
   saveComments();
   status(text ? `Comment added to your pending review · ${plural(state.comments.length, 'pending comment')}` : 'Comment dropped');
   render();
@@ -1018,7 +1040,7 @@ function diffHtml(path, notes) {
     const here = n && at.get(n);
     if (!here) return '';
     at.delete(n);
-    return here.map((x) => `<div class="inote"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}</div>`).join('');
+    return here.map((x) => `<div class="inote"><span class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}</span>${noteBtn(path, n, x)}</div>`).join('');
   };
   const lang = langOf(path);
   let shown = 0;
@@ -1526,6 +1548,10 @@ $('#page').addEventListener('click', (e) => {
     return render();
   }
   if (id === 'sub-back') return open(state.back === 'submit' ? 'brief' : state.back);
+  const nadd = e.target.closest('[data-note-text]');
+  if (nadd) return draftFromNote(nadd);
+  const nj = e.target.closest('.nadd[data-jump]');
+  if (nj) return jumpToComment(Number(nj.dataset.jump));
   const cmt = e.target.closest('.cmt');
   if (cmt) return openDraft(cmt.dataset.path, cmt.dataset.side, Number(cmt.dataset.line), cmt.dataset.code);
   const del = e.target.closest('[data-del]');
