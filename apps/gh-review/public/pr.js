@@ -181,11 +181,19 @@ const num = (n) => n.toLocaleString();
 const COLOR = { green: 'Green', yellow: 'Yellow', red: 'Red' };
 const RANK = { green: 0, yellow: 1, red: 2 };
 const doneOutput = (steps, k) => (steps[k]?.status === 'done' ? parse(steps[k]) : null);
-const tasteQuestions = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
-const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix' };
+// Questions for the author. Area standards can also note shortfalls in the existing code (kind "existing"); those are for you, not the author.
+const allTaste = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
+const tasteQuestions = (taste) => allTaste(taste).filter((q) => q.kind !== 'existing');
+const tasteExisting = (taste) => allTaste(taste).filter((q) => q.kind === 'existing');
+const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
 
-// Prior art is what the reviewer clicks, so a taste note links its first Base: link.
-const priorArt = (q) => q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+// Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
+const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+const artLink = (art) => {
+  if (!art) return '';
+  const rule = /^rule:/i.test(art.label);
+  return `<a class="ref-l" href="${safe(art.url)}" target="_blank" rel="noreferrer">${rule ? 'rule' : 'prior art'}: ${esc(art.label.replace(/^(base|rule):\s*/i, ''))}</a>`;
+};
 
 function allNotes(steps) {
   return [
@@ -484,7 +492,7 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { risk: ['signal', 'check'], description: ['description'], explain: ['explain'], taste: ['taste'] };
+const SEC_STEPS = { risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
 const rerunBtn = (id) => {
   const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
   if (!keys) return '';
@@ -545,7 +553,7 @@ function stepBody(step) {
 }
 
 // Steps the brief and the files already show. Anything else, like the optional checks, gets its own section.
-const SHOWN = ['gate', 'worktree', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files'];
+const SHOWN = ['gate', 'worktree', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files'];
 
 // The first sentence of each step leads in bold, so the list reads as a summary at a glance.
 function howStep(s, sha) {
@@ -572,6 +580,13 @@ function brief(m) {
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
   html += bsec('risk', 'Risk', risk, sigHead, 'first');
 
+  // Where you can help: the few calls that need an expert, before the wall of findings below.
+  const h = doneOutput(steps, 'help');
+  if (h) {
+    const asks = (h.asks ?? []).map((a) => `<div class="ask"><p><b>${t(a.question)}</b> ${t(a.stake)} ${a.where ? whereLink(a.where, r.headSha) : ''}</p>${a.why_you ? `<p class="why">${t(a.why_you)}</p>` : ''}</div>`);
+    html += bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
+  } else if (steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+
   const talk = conversation();
   if (talk) html += bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`);
 
@@ -593,17 +608,16 @@ function brief(m) {
   else if (steps.explain) html += bsec('explain', 'How this works', stepBody(steps.explain));
 
   const qs = tasteQuestions(doneOutput(steps, 'taste'));
-  if (!qs.length && pendingBody(steps.taste)) html += bsec('taste', 'Taste questions', pendingBody(steps.taste));
-  if (qs.length) {
-    const body = qs
-      .map((q) => {
-        const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
-        const art = priorArt(q);
-        const artL = art ? `<a class="ref-l" href="${safe(art.url)}" target="_blank" rel="noreferrer">prior art: ${esc(art.label.replace(/^base:\s*/i, ''))}</a>` : '';
-        return `<div class="taste"><span class="lens">${esc(LENS[q.lens] ?? q.lens)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}<span class="links">${pr0}${artL}</span></div></div>`;
-      })
-      .join('');
-    html += bsec('taste', 'Taste questions', body, `<span class="sub">Questions for the author, checked against prior art in the repo</span>`);
+  const existing = tasteExisting(doneOutput(steps, 'taste'));
+  if (!qs.length && !existing.length && pendingBody(steps.taste)) html += bsec('taste', 'Taste questions', pendingBody(steps.taste));
+  if (qs.length || existing.length) {
+    const row = (q, label) => {
+      const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
+      return `<div class="taste"><span class="lens">${esc(label)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}<span class="links">${pr0}${artLink(priorArt(q))}</span></div></div>`;
+    };
+    let body = qs.map((q) => row(q, LENS[q.lens] ?? q.lens)).join('');
+    if (existing.length) body += `<span class="kicker taste-sub">While you're here: the existing code, not for the author</span>${existing.map((q) => row(q, 'Existing code')).join('')}`;
+    html += bsec('taste', 'Taste questions', body, `<span class="sub">Questions for the author, checked against prior art and the area's standards</span>`);
   }
   for (const s of r?.steps ?? []) if (!SHOWN.includes(s.key)) html += bsec(s.key, s.label, `<div class="other">${hasFindings(s.key) && s.status === 'done' && pr.mine ? findingsPick(r, s) : ''}${stepBody(s)}</div>`);
 

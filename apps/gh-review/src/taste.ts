@@ -67,7 +67,7 @@ export async function verifyTaste(taste: any, { read, ask }: Deps) {
   if (!list.length) return { ...taste, dropped: [] };
   const blocks: string[] = [];
   for (const { id, q } of list) {
-    const parts = [`## ${id}`, `Question: ${q.question}`, `Why: ${q.why}`];
+    const parts = [`## ${id}`, ...(q.kind === 'existing' ? ['Kind: existing (a note on code that was already there)'] : []), `Question: ${q.question}`, `Why: ${q.why}`];
     if (q.job) parts.push(`Claimed shared job: ${q.job}`);
     if (q.siblings) parts.push(`Claimed sibling count: ${q.siblings}`);
     if (q.author_reason) parts.push(`Author's stated reason: ${q.author_reason}`);

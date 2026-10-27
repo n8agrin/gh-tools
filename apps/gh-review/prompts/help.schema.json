@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "at_stake": { "type": "string", "description": "one sentence on what the PR puts at stake, or that nothing needs the reviewer" },
+    "asks": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "stake": { "type": "string" },
+          "why_you": { "type": "string" },
+          "where": { "type": "string", "description": "path:line or path:start-end at the PR head" }
+        },
+        "required": ["question", "stake", "why_you", "where"]
+      }
+    }
+  },
+  "required": ["at_stake", "asks"]
+}

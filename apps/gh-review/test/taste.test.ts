@@ -43,3 +43,11 @@ test('a finding with no verdict is kept', () => {
   expect(out.lenses.flatMap((l: any) => l.questions).length).toBe(3);
   expect(out.dropped).toEqual([]);
 });
+
+test('the skeptic is told when a finding is about the existing code', async () => {
+  let seen = '';
+  const t = { lenses: [{ lens: 'area_standards', note: '', questions: [{ ...q('existing note', `${base}/a.ts#L1`), kind: 'existing' }, { ...q('author ask', `${base}/a.ts#L2`), kind: 'author' }] }] };
+  await verifyTaste(t, { read: async () => 'x', ask: async (text) => ((seen = text), { verdicts: [] }) });
+  expect(seen).toContain('## area_standards.1\n\nKind: existing');
+  expect(seen).not.toContain('## area_standards.2\n\nKind: existing');
+});
