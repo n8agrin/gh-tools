@@ -4,6 +4,7 @@ import { inline, markdown } from './md.js';
 import { initChat } from './chat.js';
 import { findStacks } from './stacks.js';
 import { toMarkdown } from './tomd.js';
+import { createPlayer, RATES, segments } from './narrate.js';
 
 const [, , owner, name, number] = location.pathname.split('/');
 const url = `https://github.com/${owner}/${name}/pull/${number}`;
@@ -37,6 +38,18 @@ const state = {
   pr: null, error: null, reviews: [], optional: [], extras: new Set(), shown: null, diffIds: {}, starting: false, queue: null,
   help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {},
 };
+
+// The Narration check, read aloud. With follow along on, the whole-PR narration opens each file as it reaches it.
+const player = createPlayer((why) => {
+  if (!state.pr) return;
+  const cur = player.current();
+  if (why === 'segment' && player.follow && player.scope === 'all' && cur) {
+    const to = cur.file && state.pr.files.some((f) => f.path === cur.file) ? cur.file : cur.id === 'overview' ? 'brief' : null;
+    if (to && to !== state.cur) return open(to);
+  }
+  render();
+});
+addEventListener('pagehide', () => player.stop());
 
 // Your own PRs come back to My PRs instead of the review queue.
 const home = () => (state.pr?.mine ? '/mine' : '/');
@@ -415,7 +428,7 @@ function sidebar(m) {
   if (sig) html += `<span class="risk c-${esc(sig.color)}"><i class="dot"></i><b>${esc(sig.title)}</b><span class="rs" title="${esc(sig.reason)}">${esc(sig.reason)}</span></span>`;
   html += `</section><nav>`;
   const item = (id, label, meta, hot = false) =>
-    `<div class="it ${R.has(id) ? 'done' : ''} ${state.cur === id ? 'cur' : ''}" data-go="${esc(id)}" title="${esc(id === 'brief' ? label : id)}"><span class="box" data-tick="${esc(id)}" title="Mark reviewed (space)">${R.has(id) ? '✓' : ''}</span><span class="lbl">${id === 'brief' ? esc(label) : nameHtml(id)}</span><span class="im ${hot ? 'hot' : ''}">${esc(meta)}</span></div>`;
+    `<div class="it ${R.has(id) ? 'done' : ''} ${state.cur === id ? 'cur' : ''} ${speakingOn(id) ? 'speaking' : ''}" data-go="${esc(id)}" title="${esc(id === 'brief' ? label : id)}"><span class="box" data-tick="${esc(id)}" title="Mark reviewed (space)">${R.has(id) ? '✓' : ''}</span><span class="lbl">${id === 'brief' ? esc(label) : nameHtml(id)}</span><span class="im ${hot ? 'hot' : ''}">${esc(meta)}</span></div>`;
   const d = doneOutput(m.steps, 'description');
   const nGaps = d ? d.gaps.length + (d.ui_change && !d.has_screenshots ? 1 : 0) : 0;
   const gaps = d?.verdict === 'no description' ? 'no description' : nGaps ? plural(nGaps, 'gap') : '';
@@ -553,12 +566,90 @@ function stepBody(step) {
 }
 
 // Steps the brief and the files already show. Anything else, like the optional checks, gets its own section.
-const SHOWN = ['gate', 'worktree', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files'];
+const SHOWN = ['gate', 'worktree', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files', 'narrate'];
 
 // The first sentence of each step leads in bold, so the list reads as a summary at a glance.
 function howStep(s, sha) {
   const m = String(s.text).match(/^(.+?[.!?])\s+(.+)$/s);
   return `<p>${m ? `<b>${t(m[1])}</b> ${t(m[2])}` : t(s.text)} ${whereLink(s.where, sha)}</p>`;
+}
+
+// ——— Narration ———
+
+const narration = (m) => doneOutput(m.steps, 'narrate');
+// The parts each player plays: the whole PR, or one file.
+const narrList = (scope) => {
+  const all = segments(narration(model()));
+  return scope === 'all' ? all : all.filter((s) => s.file === scope);
+};
+const speakingOn = (id) => {
+  const cur = player.playing && player.current();
+  return !!cur && (cur.file === id || (cur.id === 'overview' && id === 'brief'));
+};
+// A file page drives the whole-PR narration while it's on that file, and its own one otherwise.
+const scopeFor = (view) => (['brief', 'done', 'submit'].includes(view) ? 'all' : player.scope === 'all' && player.current()?.file === view ? 'all' : view);
+const IMPORTANCE = { high: 'read closely', medium: 'skim', low: 'pass-through' };
+const minutesOf = (list) => Math.max(1, Math.round(list.reduce((a, s) => a + s.text.split(/\s+/).length, 0) / (150 * player.rate)));
+
+function playerControls(scope) {
+  const mine = player.scope === scope;
+  const label = mine && player.playing ? 'Pause' : mine ? 'Resume' : 'Play';
+  let html = `<button class="btn primary narr-play" type="button" data-scope="${esc(scope)}">${label}<kbd>p</kbd></button>`;
+  if (mine && scope === 'all') html += `<button class="btn narr-skip" type="button" data-d="-1">Back</button><button class="btn narr-skip" type="button" data-d="1">Next</button>`;
+  if (mine) html += `<button class="btn narr-stop" type="button">Stop</button>`;
+  html += `<select class="narr-rate" title="Speed">${RATES.map((r) => `<option value="${r}" ${r === player.rate ? 'selected' : ''}>${r}×</option>`).join('')}</select>`;
+  return `<span class="narr-ctl">${html}</span>`;
+}
+
+function listenSection(m) {
+  const step = m.steps.narrate;
+  const n = narration(m);
+  const configured = state.checks?.some((c) => c.key === 'narrate');
+  if (!step && !configured) return '';
+  const sub = `<span class="sub">The change and each important file, read aloud</span>`;
+  if (!n) {
+    const body = step
+      ? stepBody(step)
+      : `<p class="riskwhy">No narration yet. <button class="link" type="button" id="narr-write">Write one</button> to hear what the code does and each important file, with its risks. It runs Claude on the diff${shownRun() ? ' and keeps the rest of the run' : ' as part of a review run'}.</p>`;
+    return bsec('narrate', 'Listen', body, sub);
+  }
+  if (!player.supported) return bsec('narrate', 'Listen', `<p class="faint">This browser can't speak. Try Chrome or Safari.</p>`, sub);
+  const list = segments(n);
+  const at = player.scope === 'all' ? player.seg : -1;
+  const en = player.voices.filter((v) => /^en/i.test(v.lang));
+  const chosen = player.voiceName && en.some((v) => v.name === player.voiceName) ? player.voiceName : '';
+  const voices = en.length
+    ? `<select class="narr-voice" title="Voice"><option value="">Best voice here</option>${en.map((v) => `<option value="${esc(v.name)}" ${v.name === chosen ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>`
+    : '';
+  const follow = `<label class="narr-follow"><input type="checkbox" class="narr-follow-box" ${player.follow ? 'checked' : ''}> Follow along</label>`;
+  const name = (s) => (s.id === 'overview' ? 'Overview' : s.id === 'routine' ? 'Routine files' : nameHtml(s.file));
+  const items = list
+    .map((s, i) => `<li class="${i === at ? 'on' : ''}"><button class="narr-at" type="button" data-at="${i}"><span class="nn">${name(s)}</span>${s.importance ? `<span class="ni">${esc(IMPORTANCE[s.importance] ?? s.importance)}</span>` : ''}</button>${i === at ? `<p>${esc(s.text)}</p>` : ''}</li>`)
+    .join('');
+  const body = `<div class="narr"><div class="narr-bar">${playerControls('all')}${voices}${follow}<span class="faint">about ${minutesOf(list)} min</span></div><ol class="narr-list">${items}</ol></div>`;
+  return bsec('narrate', 'Listen', body, sub);
+}
+
+function filePlayer(m, path) {
+  const seg = segments(narration(m)).find((s) => s.file === path);
+  if (!seg || !player.supported) return '';
+  const scope = scopeFor(path);
+  const note = scope === 'all' ? `<span class="faint">Playing as part of the whole PR</span>` : `<span class="faint">${esc(IMPORTANCE[seg.importance] ?? '')} · about ${minutesOf([seg])} min</span>`;
+  return `<div class="narr narr-file"><div class="narr-bar">${playerControls(scope)}${note}</div></div>`;
+}
+
+function togglePlayer(scope = scopeFor(state.cur)) {
+  if (player.scope === scope) return player.toggle();
+  const list = narrList(scope);
+  if (!list.length) return status(state.cur === 'brief' ? 'No narration yet. Write one from the Listen section.' : 'The narration skips this file');
+  player.play(scope, list);
+}
+
+function writeNarration() {
+  if (liveRun()) return status('A run is going. Write the narration once it finishes.');
+  if (shownRun()) return runReview(['narrate']);
+  state.extras.add('narrate');
+  runReview();
 }
 
 function brief(m) {
@@ -579,6 +670,7 @@ function brief(m) {
   if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the color, the numbers and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
   html += bsec('risk', 'Risk', risk, sigHead, 'first');
+  html += listenSection(m);
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.
   const h = doneOutput(steps, 'help');
@@ -1102,7 +1194,8 @@ function fileView(m, path) {
   // The File summaries step explains the change; the guide's one-liner is the fallback until it has run.
   const sum = doneOutput(m.steps, 'files')?.files?.find((x) => x.file === path)?.summary;
   const lead = sum ? `<p class="fsum">${t(sum)}</p>` : pendingBody(m.steps.files) || (f.note ? `<p>${t(f.note)}</p>` : '');
-  if (lead || noteLines.length) html += `<div class="fnotes">${lead}${noteLines.join('')}</div>`;
+  const listen = filePlayer(m, path);
+  if (lead || noteLines.length || listen) html += `<div class="fnotes">${lead}${noteLines.join('')}${listen}</div>`;
   html += isMd(path) && state.mdRendered && state.diff?.[path]?.hunks.some((h) => h.lines.some((l) => l[0] !== '-')) ? mdPreview(path, notes) : diffHtml(path, notes);
   const nx = nextOpen(m.order, path);
   html += `<div class="fnext"><span>${nx === 'done' ? 'Last file on the list' : `Next up: ${nx === 'brief' ? 'the brief' : esc(shortName(nx))}`}</span><span class="r"><span><kbd>k</kbd>previous</span><span><kbd>j</kbd>next</span></span></div>`;
@@ -1427,6 +1520,7 @@ const KEYS = [
   [['space', '⏎'], 'Mark reviewed and open the next unread file'],
   [['n'], 'Next unread file'],
   [['b'], 'Back to the brief'],
+  [['p'], 'Play or pause the narration: the whole PR on the brief, one file on a file page'],
   [[']'], 'Next PR in the queue'],
   [['['], 'Previous PR in the queue'],
   [['e'], 'Mark done and open the next PR'],
@@ -1501,6 +1595,7 @@ document.addEventListener('keydown', (e) => {
     ' ': markCurrent,
     Enter: markCurrent,
     n: () => open(nextOpen(model().order, state.cur)),
+    p: () => togglePlayer(),
     b: () => open('brief'),
     ']': () => go(1),
     '[': () => go(-1),
@@ -1536,6 +1631,14 @@ $('#side').addEventListener('click', (e) => {
 $('#page').addEventListener('click', (e) => {
   const id = e.target.closest('button')?.id;
   if (id === 'run') return runReview();
+  if (id === 'narr-write') return writeNarration();
+  const play = e.target.closest('.narr-play');
+  if (play) return togglePlayer(play.dataset.scope);
+  const skip = e.target.closest('.narr-skip');
+  if (skip) return player.skip(Number(skip.dataset.d));
+  if (e.target.closest('.narr-stop')) return player.stop();
+  const at = e.target.closest('.narr-at');
+  if (at) return player.play('all', narrList('all'), Number(at.dataset.at));
   const again = e.target.closest('.rerun-sec');
   if (again) return e.preventDefault(), runReview(again.dataset.only.split(','));
   if (id === 'desc-more') return (state.descOpen = !state.descOpen), render();
@@ -1651,6 +1754,9 @@ $('#rundrawer').addEventListener('change', (e) => {
 });
 
 $('#page').addEventListener('change', (e) => {
+  if (e.target.classList.contains('narr-rate')) return player.setRate(Number(e.target.value));
+  if (e.target.classList.contains('narr-voice')) return player.setVoice(e.target.value);
+  if (e.target.classList.contains('narr-follow-box')) return player.setFollow(e.target.checked);
   const bh = e.target.dataset.bh && state.bh[e.target.dataset.bh];
   if (bh) {
     const id = Number(e.target.dataset.id);

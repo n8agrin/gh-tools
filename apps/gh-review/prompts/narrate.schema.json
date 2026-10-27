@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "overview": { "type": "string", "description": "80 to 150 spoken words on what the PR does, from the code" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "importance": { "type": "string", "enum": ["high", "medium", "low"] },
+          "script": { "type": "string", "description": "40 to 110 spoken words: what changed, why it matters, the risks" }
+        },
+        "required": ["file", "importance", "script"]
+      }
+    },
+    "routine": { "type": "string", "description": "One or two sentences naming the skipped files as a group, or empty" }
+  },
+  "required": ["overview", "files", "routine"]
+}
