@@ -249,6 +249,9 @@ pre.err { color: var(--red); font-size: 12px; white-space: pre-wrap; margin: 4px
 .dl.a .c, .dl.d .c { color: var(--text); }
 .inote { margin: 4px 12px 8px 128px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .inote b { color: var(--fg); font-weight: 600; }
+.inote { display: flex; align-items: baseline; gap: 12px; }
+.inote .nt { flex: 1; }
+.inote .nadd { flex: none; font-size: 12.5px; white-space: nowrap; }
 .nodiff { margin: 14px 28px 0; font-size: 13.5px; color: var(--muted); }
 .fnext { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 28px 28px 32px; font-size: 13px; color: var(--muted); }
 .fnext .r { margin-left: auto; display: flex; gap: 14px; }
