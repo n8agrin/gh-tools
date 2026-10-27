@@ -4,6 +4,12 @@
   },
   "checks": [
     {
+      "key": "help",
+      "label": "Where you can help",
+      "prompt": "prompts/help.md",
+      "schema": "prompts/help.schema.json"
+    },
+    {
       "key": "explain",
       "label": "How this works",
       "prompt": "prompts/explain.md",

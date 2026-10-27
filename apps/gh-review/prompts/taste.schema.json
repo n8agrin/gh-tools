@@ -11,7 +11,8 @@
             "enum": [
               "consistency",
               "simple_first",
-              "right_sized"
+              "right_sized",
+              "area_standards"
             ]
           },
           "note": {
@@ -23,6 +24,14 @@
             "items": {
               "type": "object",
               "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "author",
+                    "existing"
+                  ],
+                  "description": "author: a question for the PR's author. existing: a note on code that was already there, for the reviewer (Area standards only)"
+                },
                 "question": {
                   "type": "string"
                 },
@@ -47,7 +56,7 @@
                       "url"
                     ]
                   },
-                  "description": "links to the PR's own code (label starting 'PR:') and to prior art (label starting 'Base:')"
+                  "description": "links to the PR's own code (label starting 'PR:'), to prior art (label starting 'Base:') and to written rules (label starting 'Rule:')"
                 },
                 "job": {
                   "type": "string",
@@ -63,7 +72,7 @@
                 },
                 "file": {
                   "type": "string",
-                  "description": "the PR file the question is about, repo-relative as in the diff"
+                  "description": "the file the question is about, repo-relative as in the diff; for kind existing, the existing file it is about"
                 },
                 "lines": {
                   "type": "string",
@@ -71,6 +80,7 @@
                 }
               },
               "required": [
+                "kind",
                 "question",
                 "why",
                 "job",

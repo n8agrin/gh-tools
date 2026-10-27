@@ -44,3 +44,9 @@ test('the example config names nobody\'s repos, labels or skills', async () => {
   expect(ex.red).toEqual([]);
   expect(JSON.stringify(ex)).not.toMatch(/omni|bug-hunt|nate/i);
 });
+
+test('every prompt and schema the example config names exists', async () => {
+  const ex = await Bun.file(EXAMPLE).json();
+  for (const c of ex.checks) for (const p of [c.prompt, c.schema].filter(Boolean)) expect(await Bun.file(appPath(p)).exists()).toBe(true);
+  for (const s of ex.checks.map((c: any) => c.schema).filter(Boolean)) JSON.parse(await Bun.file(appPath(s)).text());
+});

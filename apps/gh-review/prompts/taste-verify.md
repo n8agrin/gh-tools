@@ -9,6 +9,11 @@ d. Did the author already explain the choice, in a comment next to the code or i
 e. Would the suggested fix work as stated? The shared code needs a sensible home, matching signatures, and no import into an unrelated module. An "add an option" fix shouldn't turn a clean return type into a union.
 f. Does the question follow from all of the above?
 
+Two kinds of finding need a different reading:
+
+- A Rule: link cites a written rule (a CLAUDE.md, README or CONTRIBUTING line, or CODEOWNERS). Check that the rule says what the finding claims and applies to this code. A written rule that applies outranks a sibling count, so c doesn't apply to it.
+- A finding marked Kind: existing is a note about code that was already there, not a question for the author. Check that the existing code really falls short of the area's standards as described, and that it's in a spot the PR touches or leans on. Drop it if the improvement isn't clearly better or the code isn't related to this PR.
+
 Return one verdict per finding id:
 
 - keep: all of a to f hold.

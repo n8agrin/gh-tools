@@ -6,7 +6,8 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const post = (body) => fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
 
-const STARTERS = ['What should I read first, and why?', "What's most likely to break?", 'What would you ask the author?'];
+// The last one cuts through a wall of AI review text to what a human expert adds.
+const STARTERS = ['What should I read first, and why?', "What's most likely to break?", 'What would you ask the author?', 'As an expert in what this touches, what can I contribute here?'];
 
 export function initChat(url) {
   const box = $('#chat');
