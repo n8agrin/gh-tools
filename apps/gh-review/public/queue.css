@@ -51,6 +51,16 @@ header {
 .ghost[aria-pressed="true"] { color: var(--strong); background: var(--sel); }
 .right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--muted); }
 #fetched.stale { color: var(--amber); }
+/* Refreshing gets a sliding bar under the header and a spinner, so you can tell it's working. */
+header { position: relative; overflow: clip; }
+.refreshing header::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 30%; height: 3px; background: var(--amber);
+  animation: qslide 1.1s ease-in-out infinite;
+}
+@keyframes qslide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.refreshing #fetched { color: var(--amber); }
+#fetched .spin { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: -1px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--amber); animation: qspin .9s linear infinite; }
+.old main { opacity: .45; }
 
 #body { flex: 1; min-height: 0; display: flex; }
 /* The gutter is kept even when nothing scrolls, so a scrollbar showing up doesn't shift the columns. */

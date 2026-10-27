@@ -361,9 +361,15 @@ function render() {
   document.title = waiting ? `(${waiting}) Review queue` : 'Review queue';
   const when = state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   const stale = state.error && state.prs.length;
-  $('#fetched').textContent = state.loading ? 'Refreshing…' : stale ? `Couldn't refresh, showing ${when}` : when ? `Updated ${when}` : '';
+  // A list over an hour old is dimmed while it refreshes, so last night's rows don't pass for current.
+  const old = state.loading && state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 60 * 60_000;
+  $('#fetched').innerHTML = state.loading
+    ? `<i class="spin"></i>${old ? `Refreshing, list is from ${esc(when)}` : 'Refreshing from GitHub…'}`
+    : esc(stale ? `Couldn't refresh, showing ${when}` : when ? `Updated ${when}` : '');
   $('#fetched').title = stale ? state.error : '';
   $('#fetched').classList.toggle('stale', !!stale);
+  document.body.classList.toggle('refreshing', state.loading);
+  document.body.classList.toggle('old', !!old);
   $('#sorts').hidden = state.showDone;
   $('#sorts').innerHTML = Object.entries(SORTS)
     .map(([k, s]) => `<button data-sort="${k}" aria-pressed="${state.sort === k}">${s.label}</button>`)
@@ -792,9 +798,19 @@ $('#rail').addEventListener('click', (e) => {
 });
 
 // Refresh when you come back to the tab, and every few minutes while it sits open.
-window.addEventListener('focus', () => state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 60_000 && load());
+const comeBack = () => document.visibilityState === 'visible' && state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 60_000 && !state.loading && load();
+window.addEventListener('focus', comeBack);
+// Focus doesn't fire for a tab switch or for opening the lid with the tab already in front.
+document.addEventListener('visibilitychange', comeBack);
+window.addEventListener('online', comeBack);
 // Check more often while notifications are on, so a request shows up within a couple of minutes.
 setInterval(() => (state.notify || !state.fetchedAt || Date.now() - Date.parse(state.fetchedAt) > 5 * 60_000) && !state.loading && load(), 2 * 60_000);
+// Timers stop while the laptop sleeps, so a long gap between ticks means it just woke up.
+let tick = Date.now();
+setInterval(() => {
+  if (Date.now() - tick > 60_000) comeBack();
+  tick = Date.now();
+}, 10_000);
 setInterval(pollRuns, 3000);
 // The PR page leaves a message when done or set aside brought you back here.
 const pending = sessionStorage.getItem('toast');

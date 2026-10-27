@@ -168,7 +168,12 @@ const server = Bun.serve({
           } catch (e) {
             return json({ error: (e as Error).message }, 400);
           }
-          return json(await submitReview(body.url, payload));
+          const res = await submitReview(body.url, payload);
+          // Move it to Done now instead of waiting for the next fetch to see the review.
+          const review = ({ APPROVE: 'APPROVED', REQUEST_CHANGES: 'CHANGES_REQUESTED' } as const)[payload.event as 'APPROVE'];
+          const pr = cachedPR(body.url);
+          if (review && pr) saveReviewed([{ pr: { ...pr, myReview: review }, review, at: new Date().toISOString() }]);
+          return json(res);
         }
         if (pathname === '/api/chat') {
           if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/.test(body.url)) return json({ error: 'not a PR URL' }, 400);
