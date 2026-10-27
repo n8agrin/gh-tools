@@ -11,7 +11,8 @@ test('runs on the example until you have your own config', async () => {
   expect(configFile()).toBe(EXAMPLE);
   const c = await loadConfig();
   expect(c.checks.some((x) => x.key === 'signal')).toBe(true);
-  expect(c.checks.every((x) => !x.optional)).toBe(true);
+  // Narration is the one optional check, so a plain run stays as it was.
+  expect(c.checks.filter((x) => x.optional).map((x) => x.key)).toEqual(['narrate']);
 });
 
 test('reads your config from ~/.gh-review/config.json, actions included', async () => {

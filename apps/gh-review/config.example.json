@@ -52,6 +52,15 @@
       "prompt": "prompts/files.md",
       "schema": "prompts/files.schema.json",
       "model": "sonnet"
+    },
+    {
+      "key": "narrate",
+      "label": "Narration",
+      "prompt": "prompts/narrate.md",
+      "schema": "prompts/narrate.schema.json",
+      "model": "sonnet",
+      "optional": true,
+      "hint": "A spoken walkthrough of the change and each important file, played in the browser"
     }
   ],
   "red": [],
