@@ -92,7 +92,7 @@
                     },
                     "replaces": {
                       "type": "string",
-                      "description": "one sentence: what the change replaces and what it leaves alone"
+                      "description": "two or three sentences: how many places the change touches, what stays as it is and why, and whether it's a move or a behavior change (so whether it's a nit)"
                     }
                   },
                   "required": [
