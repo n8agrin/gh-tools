@@ -256,8 +256,16 @@ pre.err { color: var(--red); font-size: 12px; white-space: pre-wrap; margin: 4px
 .inote { margin: 4px 12px 8px 128px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .inote b { color: var(--fg); font-weight: 600; }
 .inote { display: flex; align-items: baseline; gap: 12px; }
-.inote .nt { flex: 1; }
+.inote .nt { flex: 1; min-width: 0; }
 .inote .nadd { flex: none; font-size: 12.5px; white-space: nowrap; }
+.ex { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ex-r { margin: 0; font-size: 13.5px; color: var(--muted); text-wrap: pretty; }
+.ex-side { border-radius: 4px; overflow: hidden; border-left: 3px solid var(--line); }
+.ex-side.now { background: var(--del-bg); border-left-color: var(--del); }
+.ex-side.after { background: var(--add-bg); border-left-color: var(--add); }
+.ex-l { display: block; padding: 4px 10px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+.ex pre { margin: 0; padding: 4px 10px 8px; overflow-x: auto; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.ex pre code { font-size: inherit; color: inherit; }
 .nodiff { margin: 14px 28px 0; font-size: 13.5px; color: var(--muted); }
 .fnext { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 28px 28px 32px; font-size: 13px; color: var(--muted); }
 .fnext .r { margin-left: auto; display: flex; gap: 14px; }

@@ -25,4 +25,10 @@ Before asking the author to share, merge or rename something, do three things. T
 
 Every question has a kind: "author" for a question to the PR's author, "existing" for a note on code that was already there (Area standards only). Keep every question to one sentence of at most 25 words, and its why to one sentence. Each lens note is one sentence. Give the PR file and line range each question is about in the file and lines fields; the page shows the question on that file.
 
+Show what the suggestion would look like. A question like "would a helper name this?" is hard to judge without seeing the helper, so whenever a question suggests a change to code (extract a helper, share a component, rename, call something else, add a state), fill the example field:
+- before: the PR's code the suggestion would change, copied exactly from the PR head, starting with a comment line naming its file and lines, e.g. `// color-helpers.ts:323-325`.
+- after: that code once the suggestion is applied. For a new helper or shared piece, give its definition first, with a comment naming where it would live (e.g. `// color-helpers.ts, beside colorSelectionParamName`), then the changed call site.
+- replaces: one sentence on what the change replaces and what it leaves alone, e.g. "Replaces the inline template at :323-325; the two tests that type the literal stay as they are."
+Keep before and after to about 12 lines each, trimmed to the lines that change plus enough to place them; use `// ...` for lines left out. Use the file's own language. When a question isn't about a code change you can sketch (wording, a missing doc, a count of sites), leave all three empty rather than inventing one.
+
 A skeptic checks every comparison against the linked code afterwards and drops the ones that don't hold, so a weak comparison costs more than it's worth.

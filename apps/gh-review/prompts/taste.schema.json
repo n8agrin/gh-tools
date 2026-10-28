@@ -77,6 +77,29 @@
                 "lines": {
                   "type": "string",
                   "description": "line range at the PR head, e.g. 40-52"
+                },
+                "example": {
+                  "type": "object",
+                  "description": "what the suggestion would look like in the code; all three empty when the question isn't about a code change",
+                  "properties": {
+                    "before": {
+                      "type": "string",
+                      "description": "the PR's code now, copied exactly from the PR head, starting with a comment naming its file and lines"
+                    },
+                    "after": {
+                      "type": "string",
+                      "description": "the same code with the suggestion applied: a new helper's definition first, then the changed call site"
+                    },
+                    "replaces": {
+                      "type": "string",
+                      "description": "one sentence: what the change replaces and what it leaves alone"
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "replaces"
+                  ]
                 }
               },
               "required": [
@@ -88,7 +111,8 @@
                 "siblings",
                 "author_reason",
                 "file",
-                "lines"
+                "lines",
+                "example"
               ]
             }
           }
