@@ -189,6 +189,32 @@ const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_s
 
 // Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
 const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+// A taste question can carry a sketch of the suggestion: the code now, the code after, and what it replaces.
+const hasExample = (ex) => !!(ex && (ex.before?.trim() || ex.after?.trim()));
+const codeHtml = (code, lang) => {
+  if (lang && window.hljs?.getLanguage(lang)) {
+    try {
+      return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {}
+  }
+  return esc(code);
+};
+function exampleHtml(ex, path) {
+  if (!hasExample(ex)) return '';
+  const lang = path ? langOf(path) : undefined;
+  const side = (label, cls, code) => (code?.trim() ? `<div class="ex-side ${cls}"><span class="ex-l">${label}</span><pre><code>${codeHtml(code.replace(/\s+$/, ''), lang)}</code></pre></div>` : '');
+  return `<div class="ex">${ex.replaces ? `<p class="ex-r">${t(ex.replaces)}</p>` : ''}${side('Now', 'now', ex.before)}${side('Suggested', 'after', ex.after)}</div>`;
+}
+// The same sketch as markdown, for a review comment.
+function exampleMd(ex, path) {
+  if (!hasExample(ex)) return '';
+  const fence = (code) => `\`\`\`${(path && langOf(path)) || ''}\n${code.replace(/\s+$/, '')}\n\`\`\``;
+  const parts = [ex.replaces?.trim()];
+  if (ex.before?.trim() && ex.after?.trim()) parts.push(`Now:\n\n${fence(ex.before)}`, `Suggested:\n\n${fence(ex.after)}`);
+  else parts.push(fence(ex.after?.trim() ? ex.after : ex.before));
+  return parts.filter(Boolean).join('\n\n');
+}
+
 const artLink = (art) => {
   if (!art) return '';
   const rule = /^rule:/i.test(art.label);
@@ -199,7 +225,7 @@ function allNotes(steps) {
   return [
     ...(doneOutput(steps, 'check')?.findings ?? []).map((f) => ({ ...f, kind: 'finding' })),
     ...(doneOutput(steps, 'guide')?.notes ?? []),
-    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q) })),
+    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example })),
   ];
 }
 const NOTE_WORD = { finding: 'Check.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
@@ -613,7 +639,7 @@ function brief(m) {
   if (qs.length || existing.length) {
     const row = (q, label) => {
       const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
-      return `<div class="taste"><span class="lens">${esc(label)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}<span class="links">${pr0}${artLink(priorArt(q))}</span></div></div>`;
+      return `<div class="taste"><span class="lens">${esc(label)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}${exampleHtml(q.example, q.file)}<span class="links">${pr0}${artLink(priorArt(q))}</span></div></div>`;
     };
     let body = qs.map((q) => row(q, LENS[q.lens] ?? q.lens)).join('');
     if (existing.length) body += `<span class="kicker taste-sub">While you're here: the existing code, not for the author</span>${existing.map((q) => row(q, 'Existing code')).join('')}`;
@@ -842,7 +868,7 @@ function openDraft(path, side, line, code, text = '', editId = null, from = null
 // ——— Callouts into your review ———
 
 // What a callout becomes as a line comment: the note, the failure it describes, and the prior art it cites.
-const noteText = (x) => [x.note, x.scenario, x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+const noteText = (x, path) => [x.note, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
 const noteKey = (x) => `${x.kind}:${x.note}`;
 const fromNote = (path, line, key) => state.comments.find((c) => c.path === path && c.line === line && c.from === key);
 
@@ -850,7 +876,7 @@ const fromNote = (path, line, key) => state.comments.find((c) => c.path === path
 function noteBtn(path, line, x) {
   const added = fromNote(path, line, noteKey(x));
   if (added) return `<button class="link nadd" type="button" data-jump="${added.id}" title="Already a pending comment on line ${line}">In your review ✓</button>`;
-  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
+  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
 }
 
 function draftFromNote(btn) {
@@ -1054,7 +1080,7 @@ function diffHtml(path, notes) {
     const here = n && at.get(n);
     if (!here) return '';
     at.delete(n);
-    return here.map((x) => `<div class="inote"><span class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}</span>${noteBtn(path, n, x)}</div>`).join('');
+    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}</div>`).join('');
   };
   const lang = langOf(path);
   let shown = 0;

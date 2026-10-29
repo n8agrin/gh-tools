@@ -8,6 +8,7 @@ c. Is the PR following its neighbors? List the sibling files or functions that d
 d. Did the author already explain the choice, in a comment next to the code or in the description? If so, the question has to engage that reason. A question that asks as if the author never considered it is a reword at best.
 e. Would the suggested fix work as stated? The shared code needs a sensible home, matching signatures, and no import into an unrelated module. An "add an option" fix shouldn't turn a clean return type into a union.
 f. Does the question follow from all of the above?
+g. If the finding has an example, is it right? Its before must match the PR's code at those lines, and its after must do what the question suggests and still work (names in scope, signatures that match). A wrong example misleads more than no example, so set drop_example when it fails and the rest of the finding holds. A reworded question that no longer fits the example also gets drop_example.
 
 Two kinds of finding need a different reading:
 

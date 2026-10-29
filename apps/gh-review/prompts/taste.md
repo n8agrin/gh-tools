@@ -25,4 +25,15 @@ Before asking the author to share, merge or rename something, do three things. T
 
 Every question has a kind: "author" for a question to the PR's author, "existing" for a note on code that was already there (Area standards only). Keep every question to one sentence of at most 25 words, and its why to one sentence. Each lens note is one sentence. Give the PR file and line range each question is about in the file and lines fields; the page shows the question on that file.
 
+Show what the suggestion would look like. A question like "would a helper name this?" is hard to judge without seeing the helper, so whenever a question suggests a change to code (extract a helper, share a component, rename, call something else, add a state), fill the example field the way you'd answer a reviewer who asked "what would it replace?":
+- before: the PR's code the suggestion would change, copied exactly from the PR head, starting with a comment line naming its file and lines, e.g. `// list-keys.ts:88-90`.
+- after: that code once the suggestion is applied. For a new helper or shared piece, give its definition first, with a comment naming where it would live (e.g. `// list-keys.ts:41, beside selectionKey`), then the changed call site.
+- replaces: two or three plain sentences. Say how many places the change touches (grep for them), what it leaves alone and why (tests that type the literal by hand, docs that spell out the shape), and how big the change is: a move or a behavior change, and so whether it's a nit.
+Keep before and after to about 12 lines each, trimmed to the lines that change plus enough to place them; use `// ...` for lines left out. Use the file's own language. When a question isn't about a code change you can sketch (wording, a missing doc, a count of sites), leave all three empty rather than inventing one.
+
+For example, for "Would a pinnedKey(index) helper beside selectionKey name the key template like the file's other generated keys?":
+- before: `// list-keys.ts:88-90` then `key: pinned ? \`pinned_${items.indexOf(item)}\` : item.id,`
+- after: `// list-keys.ts:41, beside selectionKey`, the four-line `pinnedKey(index: number)` function with a one-line doc comment, then `// list-keys.ts:88-90` and the ternary calling `pinnedKey(items.indexOf(item))`.
+- replaces: "Replaces the one inline template in source, the ternary at :88-90. The two tests that type the literal stay as they are, like the sibling tests do for the other generated keys, and the README line that documents the shape could name the helper. It's a move, not a behavior change, so it's a nit."
+
 A skeptic checks every comparison against the linked code afterwards and drops the ones that don't hold, so a weak comparison costs more than it's worth.

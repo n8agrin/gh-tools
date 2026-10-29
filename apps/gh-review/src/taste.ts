@@ -13,7 +13,19 @@ export interface Verdict {
   reason: string;
   /** The new question, for reword. */
   question?: string;
+  /** The finding holds but its before/after example is wrong, so the page shouldn't show it. */
+  drop_example?: boolean;
 }
+
+/** What a taste suggestion would look like in the code. All empty when the question isn't about a code change. */
+export interface Example {
+  before?: string;
+  after?: string;
+  replaces?: string;
+}
+
+/** An example worth showing: it has code on at least one side. */
+export const hasExample = (ex?: Example | null): ex is Example => !!(ex && (ex.before?.trim() || ex.after?.trim()));
 
 /** A github.com blob link with a line or range, as the taste prompt asks for. */
 export function site(url: string): { sha: string; path: string; start: number; end: number } | null {
@@ -48,8 +60,9 @@ export function applyVerdicts(taste: any, verdicts: Verdict[]) {
     questions: (l.questions ?? []).flatMap((q: any, i: number) => {
       const v = byId.get(`${l.lens}.${i + 1}`);
       if (v?.verdict === 'drop') return dropped.push({ question: q.question, reason: v.reason }), [];
-      if (v?.verdict === 'reword' && v.question) return [{ ...q, question: v.question, reworded: v.reason }];
-      return [q];
+      const kept = v?.drop_example ? { ...q, example: undefined, example_dropped: v.reason } : q;
+      if (v?.verdict === 'reword' && v.question) return [{ ...kept, question: v.question, reworded: v.reason }];
+      return [kept];
     }),
   }));
   return { ...taste, lenses, dropped };
@@ -71,6 +84,10 @@ export async function verifyTaste(taste: any, { read, ask }: Deps) {
     if (q.job) parts.push(`Claimed shared job: ${q.job}`);
     if (q.siblings) parts.push(`Claimed sibling count: ${q.siblings}`);
     if (q.author_reason) parts.push(`Author's stated reason: ${q.author_reason}`);
+    if (hasExample(q.example)) {
+      const ex = q.example;
+      parts.push(`Example${ex.replaces ? ` (${ex.replaces})` : ''}:\n\nBefore:\n\`\`\`\n${ex.before ?? ''}\n\`\`\`\n\nAfter:\n\`\`\`\n${ex.after ?? ''}\n\`\`\``);
+    }
     for (const e of (q.evidence ?? []) as Evidence[]) {
       const s = site(e.url);
       const text = s && (await read(s.sha, s.path));
