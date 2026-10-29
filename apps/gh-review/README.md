@@ -84,6 +84,8 @@ The PR page follows the PR Page v3 design. A checklist on the left holds the bri
 
 Each Check or Taste note under a diff line has an Add to review button. It opens a comment on that line with the note's text (and its prior-art link) for you to edit; once added it sits with your other pending comments and goes to GitHub only when you submit your review.
 
+Comment threads that put work off for later ("fine for now, but ideally…", "the right follow-up", "in a separate PR", TODO) get a Create follow-up issue button, and the brief lists them. Every other line thread has a quieter Make a follow-up issue link. Either opens a draft you can edit: a title taken from the sentence that names the work, and a body that links back to the PR and the thread and quotes the discussion. Nothing goes to GitHub until you press File issue and confirm; it's filed in the PR's repo with your `gh` login, and the thread then links to it.
+
 Runs never write to GitHub. The claude runs are denied GitHub write tools, and `bin/readonly/gh` and `bin/readonly/git` sit first on their PATH, so `gh` can only read and `git` can't push or touch anything outside the worktree. Prompts live in `prompts/`; add a check by adding it to `checks` in your config.
 
 ## Your own bug finder

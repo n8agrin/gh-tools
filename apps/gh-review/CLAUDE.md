@@ -11,3 +11,4 @@ Local review queue for PRs where someone asked for your review. Anyone should be
 - `/mine` (My PRs) lists your own open PRs with its own cache and set-aside tables (`mine`, `mine_aside`). Keep it apart from the review queue: nothing it does should change what `/` shows.
 - A check with `"findings": true` writes findings to `$GH_REVIEW_FINDINGS` (`src/findings.ts`). On your own PRs only, the PR page posts the ones you pick as one review, after a click and a confirm. Don't tie this to any one tool.
 - `bun test` runs against `test/fixture.json`; regenerate it with `bun test/make-fixture.ts`.
+- `public/followup.js` spots threads that put work off and drafts a follow-up issue. The PR page files it in the PR's repo through `createIssue()` only after File issue and a confirm.
