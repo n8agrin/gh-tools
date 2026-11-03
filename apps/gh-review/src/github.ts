@@ -361,6 +361,19 @@ export async function submitReview(url: string, payload: ReturnType<typeof revie
   return { url: JSON.parse(out).html_url ?? url };
 }
 
+/** Files an issue in a PR's repo. Only the follow-up issue form on the PR page calls this, after a confirm. */
+export async function createIssue(prUrl: string, title: string, body: string): Promise<{ url: string; number: number }> {
+  const m = prUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+$/);
+  if (!m) throw new Error(`not a PR URL: ${prUrl}`);
+  const t = title.trim();
+  if (!t) throw new Error('An issue needs a title.');
+  const proc = Bun.spawn(['gh', 'api', '-X', 'POST', `repos/${m[1]}/issues`, '--input', '-'], { stdin: new Blob([JSON.stringify({ title: t, body: body.trim() })]), stdout: 'pipe', stderr: 'pipe' });
+  const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (code !== 0) throw new Error(err.trim() || out.trim() || `gh exited ${code}`);
+  const res = JSON.parse(out);
+  return { url: res.html_url, number: res.number };
+}
+
 export interface PRComment {
   id: number;
   user: string;
