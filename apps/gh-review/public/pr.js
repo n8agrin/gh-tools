@@ -204,6 +204,10 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const num = (n) => n.toLocaleString();
 const COLOR = { green: 'Green', yellow: 'Yellow', red: 'Red' };
 const RANK = { green: 0, yellow: 1, red: 2 };
+// The merge call at the top of the brief. Merge and merge with fixes are both safe to merge as they are.
+const CALL = { merge: 'Merge', fixes: 'Merge with fixes', review: 'Merge with review', block: 'Do not merge' };
+const CALL_TONE = { merge: 'green', fixes: 'green', review: 'yellow', block: 'red' };
+const CALL_SUB = { merge: 'Good as it is', fixes: 'Safe to merge as it is, better with these changes', review: 'Needs a careful read before it merges', block: 'Something is broken' };
 const doneOutput = (steps, k) => (steps[k]?.status === 'done' ? parse(steps[k]) : null);
 // Questions for the author. Area standards can also note shortfalls in the existing code (kind "existing"); those are for you, not the author.
 const allTaste = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
@@ -462,6 +466,8 @@ function sidebar(m) {
   if (g.sendBack) html += `<div class="sendback"><span class="k1">Send back</span><b>Author should run a bug pass</b><span>No bug-pass label and no Copilot review.</span></div>`;
   html += `<section class="prog"><div class="top"><span><span class="big">${done}</span><span class="of">of ${reading.length} reviewed</span></span><span class="left">${left ? `~${left} min left` : 'nothing left'}</span></div>`;
   html += `<span class="pbar">${reading.map((f) => `<i class="${R.has(f.file) ? 'on' : ''}"></i>`).join('')}</span>`;
+  const mc = doneOutput(m.steps, 'merge');
+  if (mc && CALL[mc.call]) html += `<span class="risk c-${CALL_TONE[mc.call]}"><i class="dot"></i><b>${esc(CALL[mc.call])}</b><span class="rs" title="${esc(mc.reason)}">${esc(mc.reason)}</span></span>`;
   if (sig) html += `<span class="risk c-${esc(sig.color)}"><i class="dot"></i><b>${esc(sig.title)}</b><span class="rs" title="${esc(sig.reason)}">${esc(sig.reason)}</span></span>`;
   html += `</section><nav>`;
   const item = (id, label, meta, hot = false) =>
@@ -542,7 +548,7 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
+const SEC_STEPS = { merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
 const rerunBtn = (id) => {
   const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
   if (!keys) return '';
@@ -603,7 +609,7 @@ function stepBody(step) {
 }
 
 // Steps the brief and the files already show. Anything else, like the optional checks, gets its own section.
-const SHOWN = ['gate', 'worktree', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files', 'narrate'];
+const SHOWN = ['gate', 'worktree', 'merge', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files', 'narrate'];
 
 // The first sentence of each step leads in bold, so the list reads as a summary at a glance.
 function howStep(s, sha) {
@@ -689,11 +695,29 @@ function writeNarration() {
   runReview();
 }
 
+// Merge, merge with fixes, merge with review or do not merge, front and center.
+function mergeSection(steps, r) {
+  const mc = doneOutput(steps, 'merge');
+  if (!mc) return steps.merge && steps.merge.status !== 'skipped' ? bsec('merge', 'Merge call', stepBody(steps.merge), '', 'first') : '';
+  const call = CALL[mc.call] ? mc.call : 'review';
+  const where = (w) => (w ? whereLink(w, r.headSha) : '');
+  let body = `<div class="mcall c-${CALL_TONE[call]}"><span class="mword"><i></i>${esc(CALL[call])}</span><span class="msub">${esc(CALL_SUB[call])}</span></div>`;
+  const bits = [mc.reason && t(mc.reason[0].toUpperCase() + mc.reason.slice(1)), mc.domain && `Touches ${t(mc.domain)}.`, mc.flag && `Behind <code>${esc(mc.flag)}</code>.`].filter(Boolean);
+  if (bits.length) body += `<p class="mreason">${bits.join(' ')}</p>`;
+  if (mc.why) body += `<p class="mwhy">${t(mc.why)}</p>`;
+  if (mc.fixes?.length) body += `<ul class="mfixes">${mc.fixes.map((f) => `<li>${t(f.fix)} ${where(f.where)}</li>`).join('')}</ul>`;
+  if (mc.raisedBy) body += `<p class="riskwhy">Raised from ${esc((CALL[mc.raisedFrom] ?? mc.raisedFrom).toLowerCase())}: ${esc(mc.raisedBy)}.</p>`;
+  return bsec('merge', 'Merge call', `<div class="merge">${body}</div>`, '', 'first');
+}
+
 function brief(m) {
   const pr = state.pr;
   const { r, steps } = m;
   const ex = doneOutput(steps, 'explain');
   let html = `<div class="brief"><div class="head"><span class="kicker">Read first · about 2 min</span><h1>${esc(pr.title)}</h1>${headMeta()}${ex ? `<p class="purpose">${t(ex.one_liner)}</p>` : ''}</div>`;
+
+  const call = mergeSection(steps, r);
+  html += call;
 
   // Risk: the color, the numbers and the map.
   const sig = signalOf(steps);
@@ -706,7 +730,7 @@ function brief(m) {
   // The run itself lives in the bottom bar and its drawer (⇧D); the brief only says when there's nothing yet.
   if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the color, the numbers and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
-  html += bsec('risk', 'Risk', risk, sigHead, 'first');
+  html += bsec('risk', 'Risk', risk, sigHead, call ? '' : 'first');
   html += listenSection(m);
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.

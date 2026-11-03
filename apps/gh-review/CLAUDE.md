@@ -12,3 +12,4 @@ Local review queue for PRs where someone asked for your review. Anyone should be
 - A check with `"findings": true` writes findings to `$GH_REVIEW_FINDINGS` (`src/findings.ts`). On your own PRs only, the PR page posts the ones you pick as one review, after a click and a confirm. Don't tie this to any one tool.
 - `bun test` runs against `test/fixture.json`; regenerate it with `bun test/make-fixture.ts`.
 - `public/followup.js` spots threads that put work off and drafts a follow-up issue. The PR page files it in the PR's repo through `createIssue()` only after File issue and a confirm.
+- The merge call (`src/merge.ts`, `prompts/merge.md`) is the first thing on the brief. Most PRs should land on Merge; code only ever raises the call (red paths to Merge with review, red Check findings to Merge with fixes), never lowers it.

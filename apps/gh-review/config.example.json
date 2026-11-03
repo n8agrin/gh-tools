@@ -4,6 +4,12 @@
   },
   "checks": [
     {
+      "key": "merge",
+      "label": "Merge call",
+      "prompt": "prompts/merge.md",
+      "schema": "prompts/merge.schema.json"
+    },
+    {
       "key": "help",
       "label": "Where you can help",
       "prompt": "prompts/help.md",
