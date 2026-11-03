@@ -155,20 +155,17 @@ li.notifications-list-item.gsi-merged-approved {
   border-color: var(--borderColor-default, #d1d9e0);
 }
 
-/* +additions / -deletions next to each file in the PR file tree */
-.gsi-lines {
+/* Second +/- total (outside test files) next to GitHub's PR total */
+.gsi-total {
   display: inline-flex;
-  flex: none;
+  align-items: baseline;
   gap: 4px;
-  margin-left: auto;
-  padding-left: 8px;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+  margin-right: 12px;
+  padding-right: 12px;
+  border-right: 1px solid var(--borderColor-default, #d0d7de);
   white-space: nowrap;
-  align-self: center;
+  font-variant-numeric: tabular-nums;
 }
-.gsi-lines-add { color: var(--fgColor-success, #1a7f37); }
-.gsi-lines-del { color: var(--fgColor-danger, #d1242f); }
-.gsi-lines [hidden] { display: none; }
+.gsi-total-label { color: var(--fgColor-muted, #59636e); font-size: 12px; font-weight: 400; }
+.gsi-total-add { color: var(--fgColor-success, #1a7f37); }
+.gsi-total-del { color: var(--fgColor-danger, #d1242f); }

@@ -8,7 +8,7 @@ A Chrome extension for `github.com/notifications`. For every pull request in you
 - Highlights a row purple when the PR is **merged with your approval**: it's merged, and your own latest review on it is an approval submitted before the merge.
 - Adds a **Select merged with your approval** button next to GitHub's "Select all". It ticks the real GitHub checkboxes, so GitHub's own "Done" button works on them.
 
-On a PR's **Files changed** page it also adds a **Mark N tests viewed** button next to GitHub's "x / y viewed" counter. One click marks every test file in the PR as Viewed, then reloads the page so GitHub's checkboxes catch up.
+On a PR's **Files changed** page it also adds a **Mark N tests viewed** button next to GitHub's "x / y viewed" counter. One click marks every test file in the PR as Viewed, then reloads the page so GitHub's checkboxes catch up. Next to GitHub's +/- total for the PR it adds a second total, "w/o tests", counting only lines changed outside test files.
 
 Only your own approval counts. A PR someone else approved that you never reviewed stays unhighlighted. If your approval was dismissed, or you later requested changes, it doesn't count either.
 
@@ -41,6 +41,6 @@ Marking files viewed is a write, so a fine-grained token needs **Pull requests: 
 - `shared.js` – the classification logic, shared by the worker and the content script.
 - `background.js` – service worker: token, GraphQL, cache.
 - `content.js` / `content.css` – badges, row highlight, toolbar button.
-- `pr-files.js` – the Mark tests viewed button on PR Files changed pages.
+- `pr-files.js` – the Mark tests viewed button and the w/o tests +/- total on PR Files changed pages.
 - `options.html` / `options.js` – token setup.
 - `scripts/make-icons.js` – regenerates the icons with `node scripts/make-icons.js`.

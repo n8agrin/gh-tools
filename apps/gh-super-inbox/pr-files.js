@@ -2,8 +2,8 @@
 // test file in the PR as Viewed through the GitHub API (the new diff view only
 // renders the files on screen, so clicking checkboxes can't reach them all),
 // then reloads so GitHub's own Viewed boxes and counter catch up.
-// Also shows each file's +additions / -deletions in the file tree sidebar,
-// using counts from the same API call.
+// Also adds a second +/- total (lines outside test files) next to GitHub's
+// PR total, using counts from the same API call.
 (function () {
   'use strict';
 
@@ -17,7 +17,7 @@
   var lastProgress = null;
   var refetchTimer = null;
   var tickTimer = null;
-  var stats = null; // { byHash, byPath, list } for the current PR
+  var stats = null; // { list: [{ path, additions, deletions }] } for the current PR
 
   function currentPR() {
     var m = PAGE.exec(location.pathname);
@@ -178,10 +178,8 @@
     var resp = await send({ type: 'getPrTests', pr: pr });
     if (prKey !== key) return; // navigated away meanwhile
     if (resp && !resp.error && resp.stats) {
-      var built = await buildStats(resp.stats);
-      if (prKey !== key) return;
-      stats = built;
-      decorateTree();
+      stats = { list: resp.stats };
+      placeTotal();
     }
     state = !resp || resp.error
       ? { phase: 'error', error: (resp && resp.error) || { code: 'unknown', message: 'No response from the extension' } }
@@ -189,119 +187,64 @@
     render();
   }
 
-  // --- Line counts in the file tree --------------------------------------
+  // --- Second +/- total next to GitHub's PR total --------------------------
 
-  async function sha256(text) {
-    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  // Which files the extra total counts. 'noTests' = everything but test files.
+  var TOTAL_MODE = 'noTests';
+  var TOTALS = {
+    noTests: { label: 'w/o tests', title: 'Lines changed outside test files', keep: function (f) { return !GSI.isTestPath(f.path); } }
+  };
+  var PLUS = /^\+\s*[\d,]+$/;
+  var MINUS = /^[-\u2212\u2013]\s*[\d,]+$/;
+  var totalEl = null;
+
+  function fmt(n) { return n.toLocaleString('en-US'); }
+
+  // GitHub's "+3,726 -53" next to the tabs: the first element in the page whose
+  // text is "+N" and whose next sibling is "-N".
+  function findPrTotal() {
+    var hits = document.evaluate('//*[not(self::script)][starts-with(normalize-space(text()), "+")]',
+      document.body, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    for (var i = 0; i < hits.snapshotLength; i++) {
+      var el = hits.snapshotItem(i);
+      if (el.closest('.gsi-total') || !PLUS.test(el.textContent.trim())) continue;
+      var next = el.nextElementSibling;
+      if (next && MINUS.test(next.textContent.trim()) && el.getClientRects().length) return el;
+    }
+    return null;
   }
 
-  // GitHub links each tree entry to "#diff-<sha256 of the path>", so the hash
-  // is the most reliable way to tie a tree row to its file.
-  async function buildStats(list) {
-    var byHash = {};
-    var byPath = {};
-    await Promise.all(list.map(async function (f) {
-      byPath[f.path] = f;
-      try { byHash[await sha256(f.path)] = f; } catch (e) { /* fall back to paths */ }
-    }));
-    return { byHash: byHash, byPath: byPath, list: list };
-  }
-
-  function isDirectory(li) {
-    return li.getAttribute('data-tree-entry-type') === 'directory' ||
-      li.hasAttribute('aria-expanded') || !!li.querySelector('[role="group"], [aria-expanded]');
-  }
-
-  // The element holding a tree row's own name: the first visible text in the
-  // row (skipping nested rows, hidden text and our badge), widened to the
-  // outermost wrapper that holds only that name.
-  function ownLabel(li) {
-    var walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT, {
-      acceptNode: function (node) {
-        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        var el = node.parentElement;
-        if (el.closest('[hidden], .gsi-lines, .sr-only, [class*="VisuallyHidden"]')) return NodeFilter.FILTER_REJECT;
-        var group = el.closest('[role="group"]');
-        if (group && li.contains(group)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }
+  function placeTotal() {
+    if (!stats) {
+      if (totalEl && totalEl.isConnected) totalEl.remove();
+      return;
+    }
+    var plus = findPrTotal();
+    if (!plus) return;
+    var mode = TOTALS[TOTAL_MODE];
+    var add = 0;
+    var del = 0;
+    stats.list.forEach(function (f) {
+      if (mode.keep(f)) { add += f.additions; del += f.deletions; }
     });
-    var node = walker.nextNode();
-    if (!node) return null;
-    var text = node.nodeValue.trim();
-    var el = node.parentElement;
-    while (el.parentElement && el.parentElement !== li && el.parentElement.textContent.trim() === text) {
-      el = el.parentElement;
+    if (!totalEl) {
+      totalEl = document.createElement('span');
+      totalEl.className = 'gsi-total';
+      ['gsi-total-label', 'gsi-total-add', 'gsi-total-del'].forEach(function (c) {
+        var part = document.createElement('span');
+        part.className = c;
+        totalEl.appendChild(part);
+      });
     }
-    return { el: el, text: text };
-  }
-
-  function statFor(li) {
-    var ids = [li.id].concat(Array.from(li.querySelectorAll('[href*="diff-"], [id*="diff-"]'), function (el) {
-      return (el.getAttribute('href') || '') + ' ' + el.id;
-    }));
-    for (var i = 0; i < ids.length; i++) {
-      var m = /diff-([0-9a-f]{64})/.exec(ids[i] || '');
-      if (m && stats.byHash[m[1]]) return stats.byHash[m[1]];
+    var key = TOTAL_MODE + ':' + add + '/' + del;
+    if (totalEl.dataset.key !== key) {
+      totalEl.dataset.key = key;
+      totalEl.title = mode.title;
+      totalEl.children[0].textContent = mode.label;
+      totalEl.children[1].textContent = '+' + fmt(add);
+      totalEl.children[2].textContent = '\u2212' + fmt(del);
     }
-    if (li.id && stats.byPath[li.id]) return stats.byPath[li.id];
-    var hidden = li.querySelector('[data-filterable-item-text]');
-    if (hidden && stats.byPath[hidden.textContent.trim()]) return stats.byPath[hidden.textContent.trim()];
-
-    // Last resort: rebuild the path from the folder rows above this one.
-    var own = ownLabel(li);
-    if (!own) return null;
-    var parts = [own.text];
-    for (var up = li.parentElement && li.parentElement.closest('[role="treeitem"]'); up;
-      up = up.parentElement && up.parentElement.closest('[role="treeitem"]')) {
-      var dir = ownLabel(up);
-      if (dir) parts.unshift(dir.text);
-    }
-    var full = parts.join('/');
-    if (stats.byPath[full]) return stats.byPath[full];
-    var hits = stats.list.filter(function (f) { return f.path === full || f.path.endsWith('/' + full); });
-    return hits.length === 1 ? hits[0] : null;
-  }
-
-  function makeBadge() {
-    var badge = document.createElement('span');
-    badge.className = 'gsi-lines';
-    var add = document.createElement('span');
-    add.className = 'gsi-lines-add';
-    var del = document.createElement('span');
-    del.className = 'gsi-lines-del';
-    badge.appendChild(add);
-    badge.appendChild(del);
-    return badge;
-  }
-
-  function decorateTree() {
-    var items = document.querySelectorAll('[role="tree"] [role="treeitem"]');
-    for (var i = 0; i < items.length; i++) {
-      var li = items[i];
-      var badge = li.querySelector('.gsi-lines');
-      if (badge && badge.closest('[role="treeitem"]') !== li) badge = null;
-      var stat = stats && !isDirectory(li) ? statFor(li) : null;
-      if (!stat) {
-        if (badge) badge.remove();
-        continue;
-      }
-      var key = stat.additions + '/' + stat.deletions;
-      if (badge && badge.dataset.key === key) continue;
-      if (!badge) {
-        var own = ownLabel(li);
-        if (!own) continue;
-        badge = makeBadge();
-        own.el.insertAdjacentElement('afterend', badge);
-      }
-      badge.dataset.key = key;
-      badge.title = stat.additions + ' added, ' + stat.deletions + ' removed';
-      badge.firstChild.textContent = '+' + stat.additions;
-      badge.lastChild.textContent = '\u2212' + stat.deletions;
-      badge.firstChild.hidden = !stat.additions && !!stat.deletions;
-      badge.lastChild.hidden = !stat.deletions && !!stat.additions;
-    }
+    if (totalEl.nextSibling !== plus) plus.parentNode.insertBefore(totalEl, plus);
   }
 
   function scheduleRefetch() {
@@ -340,6 +283,7 @@
       if (btn && btn.isConnected) btn.remove();
       prKey = null;
       stats = null;
+      placeTotal();
       return;
     }
     var key = GSI.cacheKey(pr);
@@ -350,7 +294,7 @@
       stats = null;
       load();
     }
-    decorateTree();
+    placeTotal();
   }
 
   function schedule() {
