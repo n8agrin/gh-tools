@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub Super Inbox",
+  "version": "0.2.0",
+  "description": "Shows why each PR is in your GitHub inbox, flags PRs merged after you approved, and marks a PR's test files Viewed in one click.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://api.github.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["shared.js", "content.js", "pr-files.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "action": { "default_title": "GitHub Super Inbox settings" },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
