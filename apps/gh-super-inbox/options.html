@@ -51,7 +51,7 @@
 
   <h2>Get a token</h2>
   <p>If you use the <code>gh</code> CLI, run <code>gh auth token</code> and paste the output.</p>
-  <p>Otherwise create a <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=GitHub%20Super%20Inbox" target="_blank" rel="noopener">classic personal access token</a> with the <code>repo</code> scope (needed to read private repos). A fine-grained token also works if it has <strong>Pull requests: read</strong> and <strong>Metadata: read</strong> on the repos you review. If your org uses SAML SSO, authorize the token for that org.</p>
+  <p>Otherwise create a <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=GitHub%20Super%20Inbox" target="_blank" rel="noopener">classic personal access token</a> with the <code>repo</code> scope (needed to read private repos). A fine-grained token also works if it has <strong>Pull requests: read</strong> and <strong>Metadata: read</strong> on the repos you review (use <strong>Pull requests: read and write</strong> if you want the Mark tests viewed button). If your org uses SAML SSO, authorize the token for that org.</p>
 
   <label for="token">Personal access token</label>
   <input type="password" id="token" autocomplete="off" spellcheck="false" placeholder="ghp_… or gho_…">

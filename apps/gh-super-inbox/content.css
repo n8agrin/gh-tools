@@ -61,3 +61,114 @@ li.notifications-list-item.gsi-merged-approved {
 .gsi-refresh {
   min-width: 28px;
 }
+
+/* "Mark tests viewed" on PR Files changed pages, just left of GitHub's
+   "x / y viewed" counter. Styled with Primer's own tokens so it matches the
+   neighbouring buttons in light and dark themes. */
+.gsi-mark-tests {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: var(--control-small-size, 28px);
+  margin: 0 12px 0 0;
+  padding: 0 var(--control-small-paddingInline-normal, 10px);
+  font: inherit;
+  font-size: var(--text-body-size-small, 12px);
+  font-weight: var(--base-text-weight-medium, 500);
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: var(--borderRadius-medium, 6px);
+  border: var(--borderWidth-thin, 1px) solid transparent;
+  background: transparent;
+  color: var(--fgColor-muted, #656d76);
+  cursor: default;
+  transition: background-color 80ms ease;
+}
+.gsi-mark-tests[hidden] { display: none; }
+.gsi-mark-tests--action {
+  color: var(--button-default-fgColor-rest, var(--fgColor-default, #1f2328));
+  background: var(--button-default-bgColor-rest, var(--bgColor-muted, #f6f8fa));
+  border-color: var(--button-default-borderColor-rest, var(--borderColor-default, #d1d9e0));
+  box-shadow: var(--button-default-shadow-resting, none);
+  cursor: pointer;
+}
+.gsi-mark-tests--action:hover:not(:disabled) {
+  background: var(--button-default-bgColor-hover, #eff2f5);
+  border-color: var(--button-default-borderColor-hover, var(--borderColor-default, #d1d9e0));
+}
+.gsi-mark-tests--action:active:not(:disabled) {
+  background: var(--button-default-bgColor-active, #e6eaef);
+}
+.gsi-mark-tests--action:disabled { cursor: progress; }
+.gsi-mark-tests:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: -2px;
+}
+/* Quiet = plain status text, no button chrome. */
+.gsi-mark-tests--quiet { padding: 0; }
+.gsi-mark-tests--quiet:disabled { opacity: 1; }
+
+.gsi-mt-icon {
+  flex-shrink: 0;
+  fill: currentColor;
+  color: var(--fgColor-muted, #656d76);
+}
+.gsi-mark-tests--success .gsi-mt-icon { color: var(--fgColor-success, #1a7f37); }
+.gsi-mark-tests--danger .gsi-mt-icon { color: var(--fgColor-danger, #d1242f); }
+
+.gsi-mt-count {
+  display: inline-block;
+  min-width: 20px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: var(--base-text-weight-medium, 500);
+  line-height: 14px;
+  text-align: center;
+  border-radius: 2em;
+  color: var(--fgColor-default, #1f2328);
+  background: var(--buttonCounter-default-bgColor-rest, var(--bgColor-neutral-muted, rgba(129, 139, 152, 0.2)));
+}
+
+.gsi-mt-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--borderColor-muted, rgba(129, 139, 152, 0.3));
+  border-top-color: var(--fgColor-accent, #0969da);
+  animation: gsi-spin 0.8s linear infinite;
+}
+@keyframes gsi-spin { to { transform: rotate(360deg); } }
+
+.gsi-mark-tests--floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+  margin: 0;
+  box-shadow: var(--shadow-floating-small, 0 1px 3px rgba(0, 0, 0, 0.2));
+}
+.gsi-mark-tests--floating.gsi-mark-tests--quiet {
+  padding: 0 10px;
+  background: var(--overlay-bgColor, #fff);
+  border-color: var(--borderColor-default, #d1d9e0);
+}
+
+/* +additions / -deletions next to each file in the PR file tree */
+.gsi-lines {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  align-self: center;
+}
+.gsi-lines-add { color: var(--fgColor-success, #1a7f37); }
+.gsi-lines-del { color: var(--fgColor-danger, #d1242f); }
+.gsi-lines [hidden] { display: none; }

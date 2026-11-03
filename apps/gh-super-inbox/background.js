@@ -39,6 +39,10 @@ async function handle(msg) {
   switch (msg && msg.type) {
     case 'getStatuses':
       return getStatuses(msg.prs || [], !!msg.force);
+    case 'getPrTests':
+      return getPrTests(msg.pr);
+    case 'markTestsViewed':
+      return markTestsViewed(msg.pr);
     case 'verifyToken':
       return verifyToken(msg.token);
     case 'clearCache':
@@ -219,4 +223,81 @@ async function pruneExpired() {
     return k.indexOf(CACHE_PREFIX) === 0 && !(all[k] && all[k].expiresAt > now);
   });
   if (stale.length) await chrome.storage.local.remove(stale);
+}
+
+// --- "Mark tests viewed" on PR Files changed pages ---------------------------
+
+var FILES_QUERY =
+  'query($owner: String!, $repo: String!, $number: Int!, $after: String) { ' +
+  'repository(owner: $owner, name: $repo) { pullRequest(number: $number) { id ' +
+  'files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { path viewerViewedState additions deletions } } } } }';
+var MARK_CHUNK = 50;
+
+async function requireToken() {
+  var token = await getToken();
+  if (!token) throw new GSIError('no-token', 'No GitHub token set');
+  return token;
+}
+
+// All files in the PR with the viewer's Viewed state. DISMISSED means it was
+// viewed but changed since, which GitHub shows as unticked.
+async function fetchPrFiles(token, pr) {
+  if (!validPR(pr)) throw new GSIError('bad-message', 'Bad PR reference');
+  var files = [];
+  var id = null;
+  var after = null;
+  do {
+    var result = await graphql(token, FILES_QUERY, { owner: pr.owner, repo: pr.repo, number: pr.number, after: after });
+    var node = result.data.repository && result.data.repository.pullRequest;
+    if (!node) throw new GSIError('unavailable', result.warning || 'This token can’t read this PR');
+    id = node.id;
+    files = files.concat(node.files.nodes || []);
+    after = node.files.pageInfo.hasNextPage ? node.files.pageInfo.endCursor : null;
+  } while (after);
+  return { id: id, files: files };
+}
+
+function testSummary(files) {
+  var tests = files.filter(function (f) { return f && GSI.isTestPath(f.path); });
+  var unviewed = tests.filter(function (f) { return f.viewerViewedState !== 'VIEWED'; });
+  return { total: tests.length, unviewed: unviewed.map(function (f) { return f.path; }) };
+}
+
+async function getPrTests(pr) {
+  var token = await requireToken();
+  var data = await fetchPrFiles(token, pr);
+  var out = testSummary(data.files);
+  // Per-file line counts for the file tree sidebar.
+  out.stats = data.files.filter(Boolean).map(function (f) {
+    return { path: f.path, additions: f.additions || 0, deletions: f.deletions || 0 };
+  });
+  return out;
+}
+
+// Re-reads the file list so it only acts on what is unviewed right now, then
+// marks those files viewed with aliased markFileAsViewed mutations.
+async function markTestsViewed(pr) {
+  var token = await requireToken();
+  var data = await fetchPrFiles(token, pr);
+  var paths = testSummary(data.files).unviewed;
+  var marked = 0;
+  var warning = null;
+  for (var i = 0; i < paths.length; i += MARK_CHUNK) {
+    var chunk = paths.slice(i, i + MARK_CHUNK);
+    var vars = { id: data.id };
+    var decls = ['$id: ID!'];
+    var fields = chunk.map(function (path, j) {
+      vars['p' + j] = path;
+      decls.push('$p' + j + ': String!');
+      return 'm' + j + ': markFileAsViewed(input: { pullRequestId: $id, path: $p' + j + ' }) { clientMutationId }';
+    });
+    var result = await graphql(token, 'mutation(' + decls.join(', ') + ') { ' + fields.join(' ') + ' }', vars);
+    if (result.warning && !warning) warning = result.warning;
+    chunk.forEach(function (path, j) { if (result.data['m' + j]) marked += 1; });
+  }
+  if (paths.length && !marked) {
+    throw new GSIError('forbidden', (warning || 'GitHub refused the change') +
+      '. The token needs write access to pull requests.');
+  }
+  return { marked: marked, attempted: paths.length, warning: warning };
 }

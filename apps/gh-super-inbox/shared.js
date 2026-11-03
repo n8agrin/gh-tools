@@ -105,5 +105,29 @@
     return out;
   }
 
-  root.GSI = { cacheKey: cacheKey, summarizePR: summarizePR, myLatestReview: myLatestReview, classify: classify };
+  // Test files: anything under a test-ish folder (tests/, __tests__/,
+  // playwright-tests/, route-tests/, e2e/, ...) or with a test-ish file name
+  // (foo.test.ts, foo.spec.js, foo_test.go, test_foo.py, FooTest.java, .snap).
+  var TEST_DIR = /(^|[-_.])(tests?|testing|testdata|__tests__|specs?|e2e|__mocks__|__snapshots__|__fixtures__|cypress)([-_.]|$)/i;
+  var TEST_FILES = [
+    /(^|[._-])(tests?|specs?|e2e|cy)\.[^/]+$/i,
+    /^test_[^/]*\.py$/i,
+    /[A-Za-z0-9](Test|Tests|Spec|IT)\.(java|kt|kts|scala|cs|swift|groovy)$/,
+    /\.snap$/i
+  ];
+
+  function isTestPath(path) {
+    var parts = String(path || '').split('/');
+    var name = parts.pop();
+    if (parts.some(function (dir) { return TEST_DIR.test(dir); })) return true;
+    return TEST_FILES.some(function (re) { return re.test(name); });
+  }
+
+  root.GSI = {
+    cacheKey: cacheKey,
+    summarizePR: summarizePR,
+    myLatestReview: myLatestReview,
+    classify: classify,
+    isTestPath: isTestPath
+  };
 })(typeof self !== 'undefined' ? self : this);
