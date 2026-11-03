@@ -14,8 +14,8 @@ Only your own approval counts. A PR someone else approved that you never reviewe
 
 ## Install
 
-1. Clone this repo.
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick this folder.
+1. Clone the gh-tools repo. The extension needs no build or install step.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the `apps/gh-super-inbox` folder.
 3. Click the extension's icon (or open its options page) and paste a GitHub token. `gh auth token` prints one if you use the `gh` CLI. Otherwise make a classic token with the `repo` scope, or a fine-grained one with Pull requests and Metadata read access.
 4. Open `https://github.com/notifications`.
 
