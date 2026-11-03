@@ -3,6 +3,7 @@
 import { inline, markdown } from './md.js';
 import { initChat } from './chat.js';
 import { findStacks } from './stacks.js';
+import { followUpDraft, threadDefers } from './followup.js';
 import { toMarkdown } from './tomd.js';
 import { createPlayer, RATES, segments } from './narrate.js';
 
@@ -24,6 +25,16 @@ const loadReviewed = () => {
   }
 };
 
+// Follow-up issues you filed from this PR's threads, by the thread's first comment id.
+const FILED_KEY = `followups:${url}`;
+function loadFiled() {
+  try {
+    return JSON.parse(localStorage.getItem(FILED_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
 // Your line comments wait here, per PR, until you submit them as one review.
 const COMMENTS_KEY = `comments:${url}`;
 const loadComments = () => {
@@ -36,7 +47,7 @@ const loadComments = () => {
 
 const state = {
   pr: null, error: null, reviews: [], optional: [], extras: new Set(), shown: null, diffIds: {}, starting: false, queue: null,
-  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {},
+  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {}, fu: null, filed: loadFiled(),
 };
 
 // The Narration check, read aloud. With follow along on, the whole-PR narration opens each file as it reaches it.
@@ -202,6 +213,32 @@ const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_s
 
 // Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
 const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+// A taste question can carry a sketch of the suggestion: the code now, the code after, and what it replaces.
+const hasExample = (ex) => !!(ex && (ex.before?.trim() || ex.after?.trim()));
+const codeHtml = (code, lang) => {
+  if (lang && window.hljs?.getLanguage(lang)) {
+    try {
+      return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {}
+  }
+  return esc(code);
+};
+function exampleHtml(ex, path) {
+  if (!hasExample(ex)) return '';
+  const lang = path ? langOf(path) : undefined;
+  const side = (label, cls, code) => (code?.trim() ? `<div class="ex-side ${cls}"><span class="ex-l">${label}</span><pre><code>${codeHtml(code.replace(/\s+$/, ''), lang)}</code></pre></div>` : '');
+  return `<div class="ex">${ex.replaces ? `<p class="ex-r">${t(ex.replaces)}</p>` : ''}${side('Now', 'now', ex.before)}${side('Suggested', 'after', ex.after)}</div>`;
+}
+// The same sketch as markdown, for a review comment.
+function exampleMd(ex, path) {
+  if (!hasExample(ex)) return '';
+  const fence = (code) => `\`\`\`${(path && langOf(path)) || ''}\n${code.replace(/\s+$/, '')}\n\`\`\``;
+  const parts = [ex.replaces?.trim()];
+  if (ex.before?.trim() && ex.after?.trim()) parts.push(`Now:\n\n${fence(ex.before)}`, `Suggested:\n\n${fence(ex.after)}`);
+  else parts.push(fence(ex.after?.trim() ? ex.after : ex.before));
+  return parts.filter(Boolean).join('\n\n');
+}
+
 const artLink = (art) => {
   if (!art) return '';
   const rule = /^rule:/i.test(art.label);
@@ -212,7 +249,7 @@ function allNotes(steps) {
   return [
     ...(doneOutput(steps, 'check')?.findings ?? []).map((f) => ({ ...f, kind: 'finding' })),
     ...(doneOutput(steps, 'guide')?.notes ?? []),
-    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q) })),
+    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example })),
   ];
 }
 const NOTE_WORD = { finding: 'Check.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
@@ -705,7 +742,7 @@ function brief(m) {
   if (qs.length || existing.length) {
     const row = (q, label) => {
       const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
-      return `<div class="taste"><span class="lens">${esc(label)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}<span class="links">${pr0}${artLink(priorArt(q))}</span></div></div>`;
+      return `<div class="taste"><span class="lens">${esc(label)}</span><div class="q"><p>${t(q.question)}</p>${q.why ? `<p>${t(q.why)}</p>` : ''}${exampleHtml(q.example, q.file)}<span class="links">${pr0}${artLink(priorArt(q))}</span></div></div>`;
     };
     let body = qs.map((q) => row(q, LENS[q.lens] ?? q.lens)).join('');
     if (existing.length) body += `<span class="kicker taste-sub">While you're here: the existing code, not for the author</span>${existing.map((q) => row(q, 'Existing code')).join('')}`;
@@ -879,8 +916,70 @@ function ghThreads(path, side, line) {
   const all = state.gh?.lines ?? [];
   return all
     .filter((c) => !c.replyTo && c.path === path && c.side === side && c.line === line)
-    .map((root) => `<div class="gthread">${[root, ...all.filter((r) => r.replyTo === root.id)].map(ghComment).join('')}</div>`)
+    .map((root) => {
+      const thread = [root, ...all.filter((r) => r.replyTo === root.id)];
+      return `<div class="gthread">${thread.map(ghComment).join('')}${fuBox(root.id, thread, true)}</div>`;
+    })
     .join('');
+}
+
+// ——— Follow-up issues from threads that put work off ———
+
+// A thread by its first comment: a line comment with its replies, or one conversation comment or review.
+function fuThread(id) {
+  const g = state.gh;
+  if (!g) return null;
+  const root = g.lines.find((c) => c.id === id && !c.replyTo);
+  if (root) return { comments: [root, ...g.lines.filter((r) => r.replyTo === id)], path: root.path, line: root.line ?? root.originalLine, url: root.url };
+  const c = [...g.conversation, ...g.reviews].find((x) => x.id === id);
+  return c ? { comments: [c], path: null, line: null, url: c.url } : null;
+}
+
+// Under a thread: the issue you filed from it, the draft you're writing, or the offer to make one.
+// Threads that read as putting work off get the offer up front; with `quiet`, the rest get a small link.
+function fuBox(id, comments, quiet = false) {
+  const filed = state.filed[id];
+  if (filed) return `<div class="fu done">Follow-up filed: <a href="${safe(filed.url)}" target="_blank" rel="noreferrer">#${esc(filed.number)} ${esc(filed.title)} ↗</a></div>`;
+  const d = state.fu;
+  if (d?.id === id)
+    return `<div class="fu-draft"><span class="kicker"><span>Follow-up issue in ${esc(owner)}/${esc(name)}</span></span>
+      <input id="fu-title" type="text" value="${esc(d.title)}" placeholder="Title" aria-label="Issue title">
+      <textarea id="fu-body" rows="9" aria-label="Issue body">${esc(d.body)}</textarea>
+      ${d.error ? `<p class="flag">${esc(d.error)}</p>` : ''}
+      <span class="da"><button class="btn primary" type="button" id="fu-file" ${d.filing ? 'disabled' : ''}>${d.filing ? 'Filing…' : 'File issue'}<kbd>⌘⏎</kbd></button><button class="btn" type="button" id="fu-cancel">Cancel</button><span class="faint">Nothing goes to GitHub until you file it.</span></span></div>`;
+  const hit = threadDefers(comments);
+  if (hit) return `<div class="fu"><span>Puts work off: “${esc(hit.cue)}”</span><button class="btn" type="button" data-fu="${id}">Create follow-up issue</button></div>`;
+  return quiet ? `<div class="fu quiet"><button class="link" type="button" data-fu="${id}">Make a follow-up issue</button></div>` : '';
+}
+
+function openFollowUp(id) {
+  const thread = fuThread(id);
+  if (!thread || !state.pr) return;
+  state.fu = { id, ...followUpDraft(state.pr, thread), error: null, filing: false };
+  render();
+  const el = $('#fu-title');
+  el?.focus();
+  el?.scrollIntoView({ block: 'nearest' });
+}
+
+async function fileFollowUp() {
+  const d = state.fu;
+  if (!d || d.filing) return;
+  if (!d.title.trim()) return (d.error = 'Give the issue a title.'), render();
+  if (!confirm(`File "${d.title.trim()}" as an issue in ${owner}/${name}? Anyone who can see the repo will see it.`)) return;
+  d.filing = true;
+  d.error = null;
+  render();
+  const res = await post('/api/followup', { url, title: d.title, body: d.body }).catch((e) => ({ error: e.message }));
+  d.filing = false;
+  if (res.error) d.error = `GitHub didn't take it: ${res.error}`;
+  else {
+    state.filed[d.id] = { url: res.url, number: res.number, title: d.title.trim() };
+    localStorage.setItem(FILED_KEY, JSON.stringify(state.filed));
+    state.fu = null;
+    status(`Filed #${res.number} in ${owner}/${name}`);
+  }
+  render();
 }
 
 const threadCount = (path) => (state.gh?.lines ?? []).filter((c) => !c.replyTo && c.path === path).length;
@@ -896,9 +995,11 @@ function conversation() {
   if (!items.length && !bots.length && !roots.length) return '';
   const files = [...new Set(roots.map((c) => c.path))];
   let html = '';
+  const deferred = roots.filter((r) => !state.filed[r.id] && threadDefers([r, ...g.lines.filter((x) => x.replyTo === r.id)]));
+  if (deferred.length) html += `<p class="threads">${deferred.length === 1 ? 'A line thread puts' : `${deferred.length} line threads put`} work off for later: ${deferred.map((r) => `<a href="#" data-open="${esc(r.path)}">${esc(shortName(r.path))}${r.line ? `:${r.line}` : ''}</a>`).join(' · ')}</p>`;
   if (roots.length) html += `<p class="threads">${plural(roots.length, 'line thread')} in ${plural(files.length, 'file')}: ${files.map((f) => `<a href="#" data-open="${esc(f)}">${esc(shortName(f))}</a> <span class="faint">${threadCount(f)}</span>`).join(' · ')}</p>`;
   html += items
-    .map((c) => (c.review ? `<div class="gc rv ${esc(c.state.toLowerCase())}"><span class="gh2">${av(c.user)}<b>@${esc(c.user)}</b><span class="st">${esc(word[c.state] ?? c.state.toLowerCase())}</span><span>${ago2(c.at)} ago</span><a class="gl" href="${safe(c.url)}" target="_blank" rel="noreferrer">on GitHub ↗</a></span>${c.body.trim() ? `<div class="md">${markdown(c.body)}</div>` : ''}</div>` : ghComment(c)))
+    .map((c) => (c.review ? `<div class="gc rv ${esc(c.state.toLowerCase())}"><span class="gh2">${av(c.user)}<b>@${esc(c.user)}</b><span class="st">${esc(word[c.state] ?? c.state.toLowerCase())}</span><span>${ago2(c.at)} ago</span><a class="gl" href="${safe(c.url)}" target="_blank" rel="noreferrer">on GitHub ↗</a></span>${c.body.trim() ? `<div class="md">${markdown(c.body)}</div>` : ''}</div>` : ghComment(c)) + fuBox(c.id, [c]))
     .join('');
   if (bots.length) html += `<details class="bots"><summary>${plural(bots.length, 'bot comment')} (${esc([...new Set(bots.map((b) => b.user))].join(', '))})</summary>${bots.map(ghComment).join('')}</details>`;
   return html;
@@ -934,7 +1035,7 @@ function openDraft(path, side, line, code, text = '', editId = null, from = null
 // ——— Callouts into your review ———
 
 // What a callout becomes as a line comment: the note, the failure it describes, and the prior art it cites.
-const noteText = (x) => [x.note, x.scenario, x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+const noteText = (x, path) => [x.note, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
 const noteKey = (x) => `${x.kind}:${x.note}`;
 const fromNote = (path, line, key) => state.comments.find((c) => c.path === path && c.line === line && c.from === key);
 
@@ -942,7 +1043,7 @@ const fromNote = (path, line, key) => state.comments.find((c) => c.path === path
 function noteBtn(path, line, x) {
   const added = fromNote(path, line, noteKey(x));
   if (added) return `<button class="link nadd" type="button" data-jump="${added.id}" title="Already a pending comment on line ${line}">In your review ✓</button>`;
-  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
+  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
 }
 
 function draftFromNote(btn) {
@@ -1146,7 +1247,7 @@ function diffHtml(path, notes) {
     const here = n && at.get(n);
     if (!here) return '';
     at.delete(n);
-    return here.map((x) => `<div class="inote"><span class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}</span>${noteBtn(path, n, x)}</div>`).join('');
+    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}</div>`).join('');
   };
   const lang = langOf(path);
   let shown = 0;
@@ -1564,6 +1665,11 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') return e.preventDefault(), (state.draft = null), render();
     return;
   }
+  if (e.target.id === 'fu-title' || e.target.id === 'fu-body') {
+    if (cmdEnter) return e.preventDefault(), fileFollowUp();
+    if (e.key === 'Escape') return e.preventDefault(), (state.fu = null), render();
+    return;
+  }
   if (state.cur === 'submit' && cmdEnter) return e.preventDefault(), submitReview();
   if (e.shiftKey && e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey && !e.target.closest('input, textarea, select')) return e.preventDefault(), toggleDrawer();
   if (e.shiftKey && e.key.toLowerCase() === 's' && !e.metaKey && !e.ctrlKey && !e.target.closest('input, textarea, select')) return e.preventDefault(), openSubmit();
@@ -1657,6 +1763,10 @@ $('#page').addEventListener('click', (e) => {
     return chat.open(`About ${d.path} line ${d.line} (\`${d.code.trim()}\`): `);
   }
   if (id === 'submit-review') return submitReview();
+  if (id === 'fu-file') return fileFollowUp();
+  if (id === 'fu-cancel') return (state.fu = null), render();
+  const fu = e.target.closest('[data-fu]');
+  if (fu) return openFollowUp(Number(fu.dataset.fu));
   if (id === 'bh-post') return postFindings(e.target.closest('button').dataset.bhk);
   const bhAll = id === 'bh-all' && state.bh[e.target.closest('button').dataset.bhk];
   if (bhAll?.run) {
@@ -1733,6 +1843,8 @@ $('#page').addEventListener('mouseover', (e) => {
 $('#page').addEventListener('input', (e) => {
   if (e.target.id === 'draft' && state.draft) state.draft.text = e.target.value;
   if (e.target.id === 'summary') state.summary = e.target.value;
+  if (e.target.id === 'fu-title' && state.fu) state.fu.title = e.target.value;
+  if (e.target.id === 'fu-body' && state.fu) state.fu.body = e.target.value;
 });
 
 // The run drawer and its button in the bottom bar.

@@ -9,7 +9,8 @@
           "id": { "type": "string" },
           "verdict": { "type": "string", "enum": ["keep", "drop", "reword"] },
           "reason": { "type": "string" },
-          "question": { "type": "string", "description": "the reworded question, only for reword" }
+          "question": { "type": "string", "description": "the reworded question, only for reword" },
+          "drop_example": { "type": "boolean", "description": "true when the finding holds but its example doesn't match the code or the question" }
         },
         "required": ["id", "verdict", "reason"]
       }

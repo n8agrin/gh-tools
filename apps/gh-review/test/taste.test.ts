@@ -51,3 +51,20 @@ test('the skeptic is told when a finding is about the existing code', async () =
   expect(seen).toContain('## area_standards.1\n\nKind: existing');
   expect(seen).not.toContain('## area_standards.2\n\nKind: existing');
 });
+
+test('the skeptic sees each example, and can drop a wrong one while keeping the question', async () => {
+  let seen = '';
+  const example = { before: '// a.ts:3\nconst x = `own_${i}`', after: 'const ownColumn = (i: number) => `own_${i}`\nconst x = ownColumn(i)', replaces: 'Replaces the inline template.' };
+  const t = { lenses: [{ lens: 'consistency', note: '', questions: [{ ...q('helper?', `${base}/a.ts#L3`), example }, { ...q('rename?', `${base}/a.ts#L1`), example }, q('no sketch', `${base}/a.ts#L2`)] }] };
+  const out = await verifyTaste(t, {
+    read: async () => 'x',
+    ask: async (text) => ((seen = text), { verdicts: [{ id: 'consistency.2', verdict: 'keep', reason: 'after calls a name that is out of scope', drop_example: true }] }),
+  });
+  expect(seen).toContain('Example (Replaces the inline template.)');
+  expect(seen).toContain('const x = ownColumn(i)');
+  expect(seen.split('## consistency.3')[1]).not.toContain('Example');
+  const [kept, dropped] = out.lenses[0].questions;
+  expect(kept.example).toEqual(example);
+  expect(dropped.question).toBe('rename?');
+  expect(dropped.example).toBeUndefined();
+});

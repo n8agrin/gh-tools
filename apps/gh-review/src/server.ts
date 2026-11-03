@@ -5,7 +5,7 @@ import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
 import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getOverrides, getSkipped, listDone, listImported, markDone, reviewSummaries, saveMine, saveQueue, setMineAside, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef } from './github';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 
@@ -144,6 +144,16 @@ const server = Bun.serve({
             return json({ error: (e as Error).message }, 400);
           }
           return json({ run });
+        }
+        if (pathname === '/api/followup') {
+          // Files a follow-up issue in the PR's repo, only after you confirm the draft on the PR page.
+          if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/.test(body.url)) return json({ error: 'not a PR URL' }, 400);
+          if (!String(body.title ?? '').trim()) return json({ error: 'Give the issue a title.' }, 400);
+          try {
+            return json(await createIssue(body.url, String(body.title), String(body.body ?? '')));
+          } catch (e) {
+            return json({ error: (e as Error).message }, 400);
+          }
         }
         if (pathname === '/api/skip') {
           setSkipped(body.url, body.updatedAt ?? null);
