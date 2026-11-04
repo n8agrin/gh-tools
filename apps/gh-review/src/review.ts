@@ -10,6 +10,7 @@ import { findingsNote, parseFindings, saveFindings } from './findings';
 import { appPath, DANGER, expand, loadConfig, noCheckout, ROOT, type Check } from './config';
 import { decide, floorSignal, keepFindings, pathFloor, raise, type RedPath } from './signal';
 import { verifyTaste } from './taste';
+import { decideCall } from './merge';
 
 export const READONLY_BIN = join(ROOT, 'bin', 'readonly');
 
@@ -128,8 +129,8 @@ async function claude(prompt: string, o: ClaudeOptions): Promise<any> {
 
 async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: string, red: RedPath[], reviewId: number, procs?: Set<Proc>): Promise<string> {
   // A red path decides the signal on its own, so there's nothing for the AI to add.
-  const floor = check.key === 'signal' ? pathFloor(pr.files.map((f) => f.path), red) : [];
-  if (floor.length) return JSON.stringify(floorSignal(floor));
+  const floor = check.key === 'signal' || check.key === 'merge' ? pathFloor(pr.files.map((f) => f.path), red) : [];
+  if (floor.length && check.key === 'signal') return JSON.stringify(floorSignal(floor));
   const fill = (s: string) => s.replace(/\{url\}/g, pr.url).replace(/\{repo\}/g, pr.repo).replace(/\{number\}/g, String(pr.number));
   const minutes = check.optional ? 45 : 20;
   // The findings file sits in the worktree, the one place a read-only check is allowed to write.
@@ -154,6 +155,7 @@ async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: stri
   if (!schema) return String(res.result ?? '');
   const out = res.structured_output ?? JSON.parse(res.result);
   if (check.key === 'signal') return JSON.stringify(decide(out, floor));
+  if (check.key === 'merge') return JSON.stringify(decideCall(out, floor));
   if (check.key === 'check') return JSON.stringify({ findings: keepFindings(out.findings, pr.files.map((f) => f.path)) });
   if (check.key !== 'taste') return JSON.stringify(out);
 
@@ -315,6 +317,14 @@ export async function startReview(url: string, extras: string[], only: string[] 
     if (sig?.status === 'done' && chk?.status === 'done' && (redid('signal') || redid('check'))) {
       const raised = raise(JSON.parse(sig.output!), JSON.parse(chk.output!).findings);
       set('signal', { output: JSON.stringify(raised) });
+    }
+
+    // The merge call runs beside Check too, so a red finding raises it once both are in. It starts
+    // again from the AI's own answer, so a rerun of Check that clears the finding lowers it back.
+    const mc = steps.find((s) => s.key === 'merge');
+    if (mc?.status === 'done' && chk?.status === 'done' && (redid('merge') || redid('check'))) {
+      const prev = JSON.parse(mc.output!);
+      if (prev.ai) set('merge', { output: JSON.stringify(decideCall(prev.ai, pathFloor(pr.files.map((f) => f.path), config.red ?? []), JSON.parse(chk.output!).findings)) });
     }
 
     // Throw the worktree away. --force because checks may leave scratch files behind.

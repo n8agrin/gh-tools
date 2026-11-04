@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "call": { "type": "string", "enum": ["merge", "fixes", "review", "block"] },
+    "reason": { "type": "string", "description": "one short line, without the call's name" },
+    "why": { "type": "string", "description": "what's off or what breaks, for review or block; empty otherwise" },
+    "domain": { "type": "string", "description": "the sensitive area the PR touches, like payments; empty when none" },
+    "flag": { "type": "string", "description": "the feature flag the change sits behind; empty when none" },
+    "fixes": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": {
+          "fix": { "type": "string" },
+          "where": { "type": "string", "description": "path:line or path:start-end at the PR head" }
+        },
+        "required": ["fix", "where"]
+      }
+    }
+  },
+  "required": ["call", "reason", "why", "domain", "flag", "fixes"]
+}

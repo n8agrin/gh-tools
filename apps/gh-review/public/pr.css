@@ -66,6 +66,7 @@ button.link { font: inherit; color: var(--text); background: none; border: 0; pa
 .pbar i.on { background: var(--text); }
 .risk { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 13px; min-width: 0; }
 .risk .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+.risk b { white-space: nowrap; }
 .risk .rs { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-red { color: var(--red); } .c-yellow { color: var(--amber); } .c-green { color: var(--green); }
 #side nav { flex: 1; padding: 6px 0 16px; }
@@ -124,6 +125,16 @@ button.hidden-note:hover { color: var(--text); }
 .bsec:hover .copy-md, .bsec:hover .ask-md, .copy-md:focus-visible, .ask-md:focus-visible, .copy-md.done { opacity: 1; }
 .copy-md:hover, .ask-md:hover { color: var(--fg); background: var(--hover); }
 .copy-md.done { color: var(--green); }
+/* The merge call: the first thing on the brief. */
+.merge { display: flex; flex-direction: column; gap: 10px; }
+.mcall { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 14px 16px; border: 1px solid currentColor; border-radius: 4px; }
+.mcall .mword { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; line-height: 1.2; }
+.mcall .mword i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.mcall .msub { font-size: 14px; color: var(--muted); }
+.mreason { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--fg); text-wrap: pretty; }
+.mreason code { font-size: 13px; }
+.mwhy { margin: 0; font-size: 15px; line-height: 1.65; text-wrap: pretty; }
+.mfixes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.6; }
 .riskwhy { font-size: 13.5px; color: var(--muted); text-wrap: pretty; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
