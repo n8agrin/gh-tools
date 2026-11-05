@@ -226,17 +226,17 @@ export async function startReview(url: string, extras: string[], only: string[] 
   const [pr, config] = await Promise.all([fetchPR(url), loadConfig()]);
   const base = only.length ? past.find((r) => r.id === from) : undefined;
   if (only.length && !base) throw new Error('There is no earlier run to keep the other steps from, so run everything instead.');
-  // Mixing results from two different heads would hide that some of them are stale.
-  if (base && base.headSha !== pr.headSha) throw new Error(`The PR has new commits since run ${base.id}, so run everything instead.`);
+  // After new commits, the ticked steps run alone at the new head. Keeping the old steps would mix two heads and hide which are stale.
+  const keep = base && base.headSha === pr.headSha ? base : undefined;
   const mine = !!viewer() && pr.author === viewer();
   const wanted = config.checks.filter((c) => !(mine && c.skipOnMine));
-  const checks = base ? wanted.filter((c) => only.includes(c.key)) : wanted.filter((c) => !c.optional || extras.includes(c.key));
+  const checks = only.length ? wanted.filter((c) => only.includes(c.key)) : wanted.filter((c) => !c.optional || extras.includes(c.key));
   const fresh = (c: Check): ReviewStep => ({ key: c.key, label: c.label, status: 'queued' });
-  const kept = (base?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree').map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
+  const kept = (keep?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree').map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
   const steps: ReviewStep[] = [
     { key: 'gate', label: 'Bug pass', status: 'queued' },
     { key: 'worktree', label: 'Worktree', status: 'queued' },
-    ...(base ? [...kept, ...checks.filter((c) => !kept.some((x) => x.key === c.key)).map(fresh)] : checks.map(fresh)),
+    ...(only.length ? [...kept, ...checks.filter((c) => !kept.some((x) => x.key === c.key)).map(fresh)] : checks.map(fresh)),
   ];
   const id = createReview(url, pr.headSha, steps);
   const now = () => new Date().toISOString();
