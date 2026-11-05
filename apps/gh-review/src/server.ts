@@ -5,9 +5,10 @@ import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
 import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getOverrides, getSkipped, listDone, listImported, markDone, reviewSummaries, saveMine, saveQueue, setMineAside, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef } from './github';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
+import { stagesFor } from './stage';
 
 const PORT = Number(process.env.PORT ?? 4790);
 const PUBLIC = join(import.meta.dir, '..', 'public');
@@ -58,17 +59,20 @@ const server = Bun.serve({
         }
       }
       if (pathname === '/api/mine') {
-        // Your own PRs, on their own page with their own cache and set-aside list.
-        const extra = async () => ({ aside: getMineAside(), actions: await loadActions(), reviews: reviewSummaries(), live: liveReviews(), ...(await pageConfig()) });
-        if (new URL(req.url).searchParams.has('cached')) return json({ ...(cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }), ...(await extra()) });
+        // Your own PRs, on their own page with their own cache and set-aside list. The board reads the same answer, plus a stage per PR.
+        const extra = async (prs: MyPR[]) => ({ aside: getMineAside(), actions: await loadActions(), reviews: reviewSummaries(), live: liveReviews(), stages: await stagesFor(prs), ...(await pageConfig()) });
+        if (new URL(req.url).searchParams.has('cached')) {
+          const cached = cachedMine() ?? { prs: [], viewer: '', fetchedAt: null };
+          return json({ ...cached, ...(await extra(cached.prs)) });
+        }
         try {
           const q = await fetchMine();
           saveMine(q);
-          return json({ ...q, ...(await extra()) });
+          return json({ ...q, ...(await extra(q.prs)) });
         } catch (e) {
           const cached = cachedMine();
           if (!cached) throw e;
-          return json({ ...cached, ...(await extra()), error: (e as Error).message });
+          return json({ ...cached, ...(await extra(cached.prs)), error: (e as Error).message });
         }
       }
       if (pathname === '/api/findings') {
@@ -200,7 +204,7 @@ const server = Bun.serve({
         }
       }
       // /pr/<owner>/<repo>/<number> is the in-app PR page; the page reads the rest from the URL.
-      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
+      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
       const file = Bun.file(join(PUBLIC, page));
       if (!file.name!.startsWith(PUBLIC) || !(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);

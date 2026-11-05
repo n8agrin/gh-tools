@@ -191,6 +191,7 @@ const KEYS = [
   [['/'], 'Filter by title, repo, #number, label or reviewer'],
   [['esc'], 'Clear the filter'],
   [['q'], 'Go to the review queue'],
+  [['b'], 'The same PRs as a board, one column per stage (with "board": true in your config)'],
   [['t'], 'Switch between dark and light'],
   [['r'], 'Refresh from GitHub'],
   [['?'], 'Show or hide this list'],
@@ -220,6 +221,8 @@ function render() {
   $('#fetched').title = stale ? state.error : '';
   $('#fetched').classList.toggle('stale', !!stale);
   $('#theme').textContent = state.theme === 'dark' ? 'Light' : 'Dark';
+  // The board link is behind "board": true in your config until it has settled.
+  $('#board').hidden = !state.board;
   renderList(v);
   renderRail(v);
   const drafts = open.filter((p) => p.isDraft).length;
@@ -231,7 +234,7 @@ function render() {
 
 const say = (msg) => ((state.status = msg), render());
 
-const apply = (res) => Object.assign(state, { prs: res.prs, aside: res.aside ?? {}, actions: res.actions ?? [], reviewedLabel: res.reviewedLabel ?? null, reviews: res.reviews ?? {}, live: res.live ?? state.live, fetchedAt: res.fetchedAt, error: res.error ?? null });
+const apply = (res) => Object.assign(state, { prs: res.prs, aside: res.aside ?? {}, actions: res.actions ?? [], reviewedLabel: res.reviewedLabel ?? null, reviews: res.reviews ?? {}, live: res.live ?? state.live, board: !!res.board, fetchedAt: res.fetchedAt, error: res.error ?? null });
 
 async function load() {
   state.loading = true;
@@ -269,6 +272,7 @@ function openPage(p = current()) {
   sessionStorage.setItem('mineSelected', p.url);
   // The PR page walks this list with [ and ], and comes back here instead of the review queue.
   sessionStorage.setItem('order', JSON.stringify(visible().all.map((x) => x.url)));
+  sessionStorage.setItem('back', '/mine');
   location.href = `/pr/${p.repo}/${p.number}`;
 }
 
@@ -366,6 +370,7 @@ document.addEventListener('keydown', (e) => {
     h: () => ((state.showAside = !state.showAside), render()),
     r: () => load(),
     q: () => (location.href = '/'),
+    b: () => state.board && (location.href = '/board'),
     t: () => setTheme(state.theme === 'dark' ? 'light' : 'dark'),
     Escape: () => state.filter && ((search.value = ''), (state.filter = ''), render()),
     '/': () => search.focus(),
