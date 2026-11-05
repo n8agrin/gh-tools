@@ -21,14 +21,14 @@ export interface Stage {
   stalePass: boolean;
 }
 
-/** In drain order: the top of the board is what ships soonest. */
+/** In the order a PR moves, which is how the board lays them out. Blocked is off the line, so it goes last. */
 export const STAGES: { key: StageKey; label: string; rule: string }[] = [
-  { key: 'ship', label: 'Ship', rule: 'approved, CI green, nothing in the way' },
-  { key: 'undraft', label: 'Undraft', rule: 'bug pass on this head, CI green, still a draft' },
-  { key: 'fix', label: 'Fix findings', rule: 'a bug pass ran, findings still open' },
-  { key: 'blocked', label: 'Blocked', rule: 'red CI, a conflict, or changes requested' },
   { key: 'hunt', label: 'Hunt', rule: 'no bug pass on the current head' },
+  { key: 'fix', label: 'Fix findings', rule: 'a bug pass ran, findings still open' },
+  { key: 'undraft', label: 'Undraft', rule: 'bug pass on this head, CI green, still a draft' },
   { key: 'waiting', label: 'Waiting', rule: 'on someone else' },
+  { key: 'ship', label: 'Ship', rule: 'approved, CI green, nothing in the way' },
+  { key: 'blocked', label: 'Blocked', rule: 'red CI, a conflict, or changes requested' },
 ];
 
 /** What the review runs kept here say about one PR's bug passes. */

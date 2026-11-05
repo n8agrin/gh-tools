@@ -1,0 +1,492 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: "78"
+      - generic [ref=e5]: open
+    - generic [ref=e6]:
+      - textbox "/" [ref=e7]:
+        - /placeholder: Filter your PRs
+      - generic [ref=e8]: /
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: "25"
+        - text: need you
+      - generic "Ship" [ref=e12]: "5"
+      - generic "Undraft" [ref=e15]: "9"
+      - generic "Fix findings" [ref=e18]: "0"
+      - generic "Blocked" [ref=e21]: "11"
+    - link "List" [ref=e24] [cursor=pointer]:
+      - /url: /mine
+    - link "Review queue" [ref=e25] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e26]:
+      - generic [ref=e27]: Refreshing…
+      - button "Dark" [ref=e28] [cursor=pointer]
+  - main "your open pull requests by stage" [ref=e29]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - text: Ship
+            - generic [ref=e35]: "5"
+          - generic [ref=e36]: approved, CI green, nothing in the way
+        - option "omni#73165 2/8 YAML dialect for filter URL params approved CI success 2h Approved, CI green, bug pass done. It can merge now. Merge on GitHub o PR page ↵ Review ⇧R Aside x" [selected] [ref=e37] [cursor=pointer]:
+          - generic [ref=e38]:
+            - generic [ref=e39]: omni#73165
+            - generic "stack of 8, bottom first" [ref=e40]: 2/8
+          - 'generic "feat(filters): YAML dialect for filter URL params" [ref=e41]': YAML dialect for filter URL params
+          - generic [ref=e42]:
+            - generic [ref=e43]: approved
+            - generic "CI success" [ref=e44]
+            - generic "updated 11/4/2026, 5:24:40 PM" [ref=e45]: 2h
+          - generic [ref=e46]: Approved, CI green, bug pass done. It can merge now.
+          - generic [ref=e47]:
+            - button "Merge on GitHub o" [ref=e48]:
+              - text: Merge on GitHub
+              - generic [ref=e49]: o
+            - generic [ref=e50]:
+              - button "PR page ↵" [ref=e51]:
+                - text: PR page
+                - generic [ref=e52]: ↵
+              - button "Review ⇧R" [ref=e53]:
+                - text: Review
+                - generic [ref=e54]: ⇧R
+              - button "Aside x" [ref=e55]:
+                - text: Aside
+                - generic [ref=e56]: x
+        - 'option "omni#68523 2/9 [stack 2/9] feat(calcs): fold the JEV_ calcs into AI_ functions on the JVM approved CI success 6h" [ref=e57] [cursor=pointer]':
+          - generic [ref=e58]:
+            - generic [ref=e59]: omni#68523
+            - generic "stack of 9, bottom first" [ref=e60]: 2/9
+          - 'generic "[stack 2/9] feat(calcs): fold the JEV_ calcs into AI_ functions on the JVM" [ref=e61]'
+          - generic [ref=e62]:
+            - generic [ref=e63]: approved
+            - generic "CI success" [ref=e64]
+            - generic "updated 11/4/2026, 1:52:54 PM" [ref=e65]: 6h
+        - option "cli#56 Harden CI workflows and install.sh against supply-chain attacks approved CI success 2w" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: cli#56
+          - generic "Harden CI workflows and install.sh against supply-chain attacks" [ref=e69]
+          - generic [ref=e70]:
+            - generic [ref=e71]: approved
+            - generic "CI success" [ref=e72]
+            - generic "updated 10/16/2026, 7:07:08 AM" [ref=e73]: 2w
+        - option "vega-embed#5 update to v7.1.0 fork.3 approved CI none 46w" [ref=e74] [cursor=pointer]:
+          - generic [ref=e75]: vega-embed#5
+          - 'generic "chore: update to v7.1.0 fork.3" [ref=e77]': update to v7.1.0 fork.3
+          - generic [ref=e78]:
+            - generic [ref=e79]: approved
+            - generic "CI none" [ref=e80]
+            - generic "updated 12/11/2025, 10:53:06 AM" [ref=e81]: 46w
+        - option "vega-lite#13 v6.2.0 fork.2 approved CI none 46w" [ref=e82] [cursor=pointer]:
+          - generic [ref=e83]: vega-lite#13
+          - 'generic "chore: v6.2.0 fork.2" [ref=e85]': v6.2.0 fork.2
+          - generic [ref=e86]:
+            - generic [ref=e87]: approved
+            - generic "CI none" [ref=e88]
+            - generic "updated 12/11/2025, 10:51:52 AM" [ref=e89]: 46w
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - text: Undraft
+            - generic [ref=e94]: "9"
+          - generic [ref=e95]: bug pass on this head, CI green, still a draft
+        - option "Draft omni#62737 cap JSON action bodies before the CSRF parse bug pass clean CI success 1d" [ref=e96] [cursor=pointer]:
+          - generic [ref=e97]:
+            - generic [ref=e98]: Draft
+            - generic [ref=e99]: omni#62737
+          - 'generic "fix(routes): cap JSON action bodies before the CSRF parse" [ref=e100]': cap JSON action bodies before the CSRF parse
+          - generic [ref=e101]:
+            - generic [ref=e102]: bug pass clean
+            - generic "CI success" [ref=e103]
+            - generic "updated 11/3/2026, 5:32:37 PM" [ref=e104]: 1d
+        - option "Draft omni#63400 address an input column by the value column's real name bug pass clean CI success 1d" [ref=e105] [cursor=pointer]:
+          - generic [ref=e106]:
+            - generic [ref=e107]: Draft
+            - generic [ref=e108]: omni#63400
+          - 'generic "fix(apps): address an input column by the value column''s real name" [ref=e109]': address an input column by the value column's real name
+          - generic [ref=e110]:
+            - generic [ref=e111]: bug pass clean
+            - generic "CI success" [ref=e112]
+            - generic "updated 11/3/2026, 5:32:11 PM" [ref=e113]: 1d
+        - generic [ref=e114]:
+          - generic [ref=e115]: Stack of 5
+          - generic [ref=e116]:
+            - generic "1/5 waiting" [ref=e117]
+            - generic "2/5 undraft" [ref=e118]
+            - generic "3/5 undraft" [ref=e119]
+            - generic "4/5 undraft" [ref=e120]
+            - generic "5/5 hunt" [ref=e121]
+          - generic [ref=e122]: 3 here
+        - option "Draft omni#72937 2/5 cancel only the queries the kill route accepted bug pass clean CI success 1d" [ref=e123] [cursor=pointer]:
+          - generic [ref=e124]:
+            - generic [ref=e125]: Draft
+            - generic [ref=e126]: omni#72937
+            - generic "stack of 5, bottom first" [ref=e127]: 2/5
+          - 'generic "fix(query-pipeline): cancel only the queries the kill route accepted" [ref=e128]': cancel only the queries the kill route accepted
+          - generic [ref=e129]:
+            - generic [ref=e130]: bug pass clean
+            - generic "CI success" [ref=e131]
+            - generic "updated 11/3/2026, 10:10:05 AM" [ref=e132]: 1d
+        - option "Draft omni#72940 3/5 keep a closed run from changing state or reconnecting bug pass clean CI success 1d" [ref=e133] [cursor=pointer]:
+          - generic [ref=e134]:
+            - generic [ref=e135]: Draft
+            - generic [ref=e136]: omni#72940
+            - generic "stack of 5, bottom first" [ref=e137]: 3/5
+          - 'generic "fix(query-pipeline): keep a closed run from changing state or reconnecting" [ref=e138]': keep a closed run from changing state or reconnecting
+          - generic [ref=e139]:
+            - generic [ref=e140]: bug pass clean
+            - generic "CI success" [ref=e141]
+            - generic "updated 11/3/2026, 10:10:08 AM" [ref=e142]: 1d
+        - option "Draft omni#72941 4/5 report query runs that give up retrying bug pass clean CI success 1d" [ref=e143] [cursor=pointer]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: Draft
+            - generic [ref=e146]: omni#72941
+            - generic "stack of 5, bottom first" [ref=e147]: 4/5
+          - 'generic "fix(query-pipeline): report query runs that give up retrying" [ref=e148]': report query runs that give up retrying
+          - generic [ref=e149]:
+            - generic [ref=e150]: bug pass clean
+            - generic "CI success" [ref=e151]
+            - generic "updated 11/3/2026, 10:10:12 AM" [ref=e152]: 1d
+        - option "Draft omni#72936 ignore malformed sort and pagination URL params bug pass clean CI success 1d" [ref=e153] [cursor=pointer]:
+          - generic [ref=e154]:
+            - generic [ref=e155]: Draft
+            - generic [ref=e156]: omni#72936
+          - 'generic "fix(dashboards): ignore malformed sort and pagination URL params" [ref=e157]': ignore malformed sort and pagination URL params
+          - generic [ref=e158]:
+            - generic [ref=e159]: bug pass clean
+            - generic "CI success" [ref=e160]
+            - generic "updated 11/3/2026, 10:10:02 AM" [ref=e161]: 1d
+        - option "Draft omni#72934 pin a viewer's boosted dashboard run to the stored config bug pass clean CI success 1d" [ref=e162] [cursor=pointer]:
+          - generic [ref=e163]:
+            - generic [ref=e164]: Draft
+            - generic [ref=e165]: omni#72934
+          - 'generic "fix(query-pipeline): pin a viewer''s boosted dashboard run to the stored config" [ref=e166]': pin a viewer's boosted dashboard run to the stored config
+          - generic [ref=e167]:
+            - generic [ref=e168]: bug pass clean
+            - generic "CI success" [ref=e169]
+            - generic "updated 11/3/2026, 10:09:56 AM" [ref=e170]: 1d
+        - option "Draft omni#72932 refuse a dashboard drill from another workbook bug pass clean CI success 1d" [ref=e171] [cursor=pointer]:
+          - generic [ref=e172]:
+            - generic [ref=e173]: Draft
+            - generic [ref=e174]: omni#72932
+          - 'generic "fix(query-pipeline): refuse a dashboard drill from another workbook" [ref=e175]': refuse a dashboard drill from another workbook
+          - generic [ref=e176]:
+            - generic [ref=e177]: bug pass clean
+            - generic "CI success" [ref=e178]
+            - generic "updated 11/3/2026, 10:09:50 AM" [ref=e179]: 1d
+        - button "→ 1 more" [ref=e180] [cursor=pointer]:
+          - generic [ref=e181]: →
+          - text: 1 more
+      - generic [ref=e182]:
+        - generic [ref=e183]:
+          - generic [ref=e184]:
+            - text: Fix findings
+            - generic [ref=e186]: "0"
+          - generic [ref=e187]: a bug pass ran, findings still open
+        - generic [ref=e188]: nothing here
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - generic [ref=e191]:
+            - text: Blocked
+            - generic [ref=e193]: "11"
+          - generic [ref=e194]: red CI, a conflict, or changes requested
+        - option "Draft omni#59679 gate /embed/sso/generate-url on the admin-embed flag conflicts CI success 1d" [ref=e195] [cursor=pointer]:
+          - generic [ref=e196]:
+            - generic [ref=e197]: Draft
+            - generic [ref=e198]: omni#59679
+          - 'generic "fix(embed): gate /embed/sso/generate-url on the admin-embed flag" [ref=e199]': gate /embed/sso/generate-url on the admin-embed flag
+          - generic [ref=e200]:
+            - generic [ref=e201]: conflicts
+            - generic "CI success" [ref=e202]
+            - generic "updated 11/3/2026, 5:34:54 PM" [ref=e203]: 1d
+        - option "Draft omni#72943 close the gaps between the query result dispatchers conflicts CI success 1d" [ref=e204] [cursor=pointer]:
+          - generic [ref=e205]:
+            - generic [ref=e206]: Draft
+            - generic [ref=e207]: omni#72943
+          - 'generic "fix(query-pipeline): close the gaps between the query result dispatchers" [ref=e208]': close the gaps between the query result dispatchers
+          - generic [ref=e209]:
+            - generic [ref=e210]: conflicts
+            - generic "CI success" [ref=e211]
+            - generic "updated 11/3/2026, 10:10:18 AM" [ref=e212]: 1d
+        - option "omni#72933 close the branch fence on /queries/run CI failing CI failure 1d" [ref=e213] [cursor=pointer]:
+          - generic [ref=e214]: omni#72933
+          - 'generic "fix(query-pipeline): close the branch fence on /queries/run" [ref=e216]': close the branch fence on /queries/run
+          - generic [ref=e217]:
+            - generic [ref=e218]: CI failing
+            - generic "CI failure" [ref=e219]
+            - generic "updated 11/3/2026, 10:09:52 AM" [ref=e220]: 1d
+        - option "Draft omni#70755 4/4 draw a custom vis in an MCP host conflicts CI success 2d" [ref=e221] [cursor=pointer]:
+          - generic [ref=e222]:
+            - generic [ref=e223]: Draft
+            - generic [ref=e224]: omni#70755
+            - generic "stack of 4, bottom first" [ref=e225]: 4/4
+          - 'generic "feat(custom-vis): draw a custom vis in an MCP host" [ref=e226]': draw a custom vis in an MCP host
+          - generic [ref=e227]:
+            - generic [ref=e228]: conflicts
+            - generic "CI success" [ref=e229]
+            - generic "updated 11/2/2026, 12:59:23 PM" [ref=e230]: 2d
+        - option "omni#66710 1/5 move the one-pagers into an omnipedia/ wiki CI failing CI failure 6d" [ref=e231] [cursor=pointer]:
+          - generic [ref=e232]:
+            - generic [ref=e233]: omni#66710
+            - generic "stack of 5, bottom first" [ref=e234]: 1/5
+          - 'generic "docs(omnipedia): move the one-pagers into an omnipedia/ wiki" [ref=e235]': move the one-pagers into an omnipedia/ wiki
+          - generic [ref=e236]:
+            - generic [ref=e237]: CI failing
+            - generic "CI failure" [ref=e238]
+            - generic "updated 10/29/2026, 8:45:54 AM" [ref=e239]: 6d
+        - option "Draft omni#71023 save the settings a custom vis changes in chat conflicts CI success 12d" [ref=e240] [cursor=pointer]:
+          - generic [ref=e241]:
+            - generic [ref=e242]: Draft
+            - generic [ref=e243]: omni#71023
+          - 'generic "feat(custom-vis): save the settings a custom vis changes in chat" [ref=e244]': save the settings a custom vis changes in chat
+          - generic [ref=e245]:
+            - generic [ref=e246]: conflicts
+            - generic "CI success" [ref=e247]
+            - generic "updated 10/23/2026, 3:40:26 PM" [ref=e248]: 12d
+        - option "Draft omni#71024 resume Blobby once when a custom vis fails to draw conflicts CI success 13d" [ref=e249] [cursor=pointer]:
+          - generic [ref=e250]:
+            - generic [ref=e251]: Draft
+            - generic [ref=e252]: omni#71024
+          - 'generic "feat(custom-vis): resume Blobby once when a custom vis fails to draw" [ref=e253]': resume Blobby once when a custom vis fails to draw
+          - generic [ref=e254]:
+            - generic [ref=e255]: conflicts
+            - generic "CI success" [ref=e256]
+            - generic "updated 10/22/2026, 5:00:30 PM" [ref=e257]: 13d
+        - option "embed-sdk#202 add CLAUDE.md covering the release channels CI failing CI failure 9w" [ref=e258] [cursor=pointer]:
+          - generic [ref=e259]: embed-sdk#202
+          - 'generic "chore: add CLAUDE.md covering the release channels" [ref=e261]': add CLAUDE.md covering the release channels
+          - generic [ref=e262]:
+            - generic [ref=e263]: CI failing
+            - generic "CI failure" [ref=e264]
+            - generic "updated 8/31/2026, 4:20:44 PM" [ref=e265]: 9w
+        - button "→ 3 more" [ref=e266] [cursor=pointer]:
+          - generic [ref=e267]: →
+          - text: 3 more
+      - generic [ref=e268]:
+        - generic [ref=e269]:
+          - generic [ref=e270]:
+            - text: Hunt
+            - generic [ref=e272]: "41"
+          - generic [ref=e273]: no bug pass on the current head
+        - option "Draft omni#67488 jev fast path for Blobby chart-type follow-ups no bug pass CI success 1h" [ref=e274] [cursor=pointer]:
+          - generic [ref=e275]:
+            - generic [ref=e276]: Draft
+            - generic [ref=e277]: omni#67488
+          - 'generic "feat(ai): jev fast path for Blobby chart-type follow-ups" [ref=e278]': jev fast path for Blobby chart-type follow-ups
+          - generic [ref=e279]:
+            - generic [ref=e280]: no bug pass
+            - generic "CI success" [ref=e281]
+            - generic "updated 11/4/2026, 6:18:17 PM" [ref=e282]: 1h
+        - generic [ref=e283]:
+          - generic [ref=e284]: Stack of 8
+          - generic [ref=e285]:
+            - generic "1/8" [ref=e286]
+            - generic "2/8 ship" [ref=e287]
+            - generic "3/8 waiting" [ref=e288]
+            - generic "4/8 waiting" [ref=e289]
+            - generic "5/8 waiting" [ref=e290]
+            - generic "6/8 hunt" [ref=e291]
+            - generic "7/8 hunt" [ref=e292]
+            - generic "8/8 hunt" [ref=e293]
+          - generic [ref=e294]: 3 here
+        - option "omni#73169 6/8 redirect old filter links to YAML behind yaml-url-filters no bug pass CI success 2h" [ref=e295] [cursor=pointer]:
+          - generic [ref=e296]:
+            - generic [ref=e297]: omni#73169
+            - generic "stack of 8, bottom first" [ref=e298]: 6/8
+          - 'generic "feat(filters): redirect old filter links to YAML behind yaml-url-filters" [ref=e299]': redirect old filter links to YAML behind yaml-url-filters
+          - generic [ref=e300]:
+            - generic [ref=e301]: no bug pass
+            - generic "CI success" [ref=e302]
+            - generic "updated 11/4/2026, 5:57:15 PM" [ref=e303]: 2h
+        - option "omni#73170 7/8 YAML filters in model link templates no bug pass CI success 2h" [ref=e304] [cursor=pointer]:
+          - generic [ref=e305]:
+            - generic [ref=e306]: omni#73170
+            - generic "stack of 8, bottom first" [ref=e307]: 7/8
+          - 'generic "feat(filters): YAML filters in model link templates" [ref=e308]': YAML filters in model link templates
+          - generic [ref=e309]:
+            - generic [ref=e310]: no bug pass
+            - generic "CI success" [ref=e311]
+            - generic "updated 11/4/2026, 5:47:16 PM" [ref=e312]: 2h
+        - option "Draft omni#73171 8/8 turn on yaml-url-filters no bug pass CI success 2h" [ref=e313] [cursor=pointer]:
+          - generic [ref=e314]:
+            - generic [ref=e315]: Draft
+            - generic [ref=e316]: omni#73171
+            - generic "stack of 8, bottom first" [ref=e317]: 8/8
+          - 'generic "feat(filters): turn on yaml-url-filters" [ref=e318]': turn on yaml-url-filters
+          - generic [ref=e319]:
+            - generic [ref=e320]: no bug pass
+            - generic "CI success" [ref=e321]
+            - generic "updated 11/4/2026, 5:27:31 PM" [ref=e322]: 2h
+        - option "omni#73155 1/2 pin the cookie-first token order next to the code no bug pass CI success 2h" [ref=e323] [cursor=pointer]:
+          - generic [ref=e324]:
+            - generic [ref=e325]: omni#73155
+            - generic "stack of 2, bottom first" [ref=e326]: 1/2
+          - 'generic "docs(csrf): pin the cookie-first token order next to the code" [ref=e327]': pin the cookie-first token order next to the code
+          - generic [ref=e328]:
+            - generic [ref=e329]: no bug pass
+            - generic "CI success" [ref=e330]
+            - generic "updated 11/4/2026, 5:12:05 PM" [ref=e331]: 2h
+        - option "Draft omni#73157 2/2 rotate the token on a change of user and on logout, behind a flag no bug pass CI success 3h" [ref=e332] [cursor=pointer]:
+          - generic [ref=e333]:
+            - generic [ref=e334]: Draft
+            - generic [ref=e335]: omni#73157
+            - generic "stack of 2, bottom first" [ref=e336]: 2/2
+          - 'generic "feat(csrf): rotate the token on a change of user and on logout, behind a flag" [ref=e337]': rotate the token on a change of user and on logout, behind a flag
+          - generic [ref=e338]:
+            - generic [ref=e339]: no bug pass
+            - generic "CI success" [ref=e340]
+            - generic "updated 11/4/2026, 4:52:46 PM" [ref=e341]: 3h
+        - option "omni#68662 1/2 leave cells empty, with a warning, when an AI decisions calc fails no bug pass CI success 5h" [ref=e342] [cursor=pointer]:
+          - generic [ref=e343]:
+            - generic [ref=e344]: omni#68662
+            - generic "stack of 2, bottom first" [ref=e345]: 1/2
+          - 'generic "feat(calcs): leave cells empty, with a warning, when an AI decisions calc fails" [ref=e346]': leave cells empty, with a warning, when an AI decisions calc fails
+          - generic [ref=e347]:
+            - generic [ref=e348]: no bug pass
+            - generic "CI success" [ref=e349]
+            - generic "updated 11/4/2026, 2:08:21 PM" [ref=e350]: 5h
+        - option "omni#68722 2/2 ask the decisions provider only about the rows a limit keeps no bug pass CI success 5h" [ref=e351] [cursor=pointer]:
+          - generic [ref=e352]:
+            - generic [ref=e353]: omni#68722
+            - generic "stack of 2, bottom first" [ref=e354]: 2/2
+          - 'generic "fix(calcs): ask the decisions provider only about the rows a limit keeps" [ref=e355]': ask the decisions provider only about the rows a limit keeps
+          - generic [ref=e356]:
+            - generic [ref=e357]: no bug pass
+            - generic "CI success" [ref=e358]
+            - generic "updated 11/4/2026, 2:06:52 PM" [ref=e359]: 5h
+        - button "→ 33 more" [ref=e360] [cursor=pointer]:
+          - generic [ref=e361]: →
+          - text: 33 more
+      - generic [ref=e362]:
+        - generic [ref=e363]:
+          - generic [ref=e364]:
+            - text: Waiting
+            - generic [ref=e366]: "12"
+          - generic [ref=e367]: on someone else
+        - generic [ref=e368]:
+          - generic [ref=e369]: Stack of 8
+          - generic [ref=e370]:
+            - generic "1/8" [ref=e371]
+            - generic "2/8 ship" [ref=e372]
+            - generic "3/8 waiting" [ref=e373]
+            - generic "4/8 waiting" [ref=e374]
+            - generic "5/8 waiting" [ref=e375]
+            - generic "6/8 hunt" [ref=e376]
+            - generic "7/8 hunt" [ref=e377]
+            - generic "8/8 hunt" [ref=e378]
+          - generic [ref=e379]: 3 here
+        - option "omni#73166 3/8 read YAML filter values in every URL filter param nobody asked CI success 2h" [ref=e380] [cursor=pointer]:
+          - generic [ref=e381]:
+            - generic [ref=e382]: omni#73166
+            - generic "stack of 8, bottom first" [ref=e383]: 3/8
+          - 'generic "feat(filters): read YAML filter values in every URL filter param" [ref=e384]': read YAML filter values in every URL filter param
+          - generic [ref=e385]:
+            - generic [ref=e386]: nobody asked
+            - generic "CI success" [ref=e387]
+            - generic "updated 11/4/2026, 5:28:40 PM" [ref=e388]: 2h
+        - option "omni#73167 4/8 tell the viewer when a filter from the link isn't applied nobody asked CI success 2h" [ref=e389] [cursor=pointer]:
+          - generic [ref=e390]:
+            - generic [ref=e391]: omni#73167
+            - generic "stack of 8, bottom first" [ref=e392]: 4/8
+          - 'generic "feat(filters): tell the viewer when a filter from the link isn''t applied" [ref=e393]': tell the viewer when a filter from the link isn't applied
+          - generic [ref=e394]:
+            - generic [ref=e395]: nobody asked
+            - generic "CI success" [ref=e396]
+            - generic "updated 11/4/2026, 5:49:33 PM" [ref=e397]: 2h
+        - option "omni#73168 5/8 write YAML filter URLs behind yaml-url-filters nobody asked CI success 2h" [ref=e398] [cursor=pointer]:
+          - generic [ref=e399]:
+            - generic [ref=e400]: omni#73168
+            - generic "stack of 8, bottom first" [ref=e401]: 5/8
+          - 'generic "feat(filters): write YAML filter URLs behind yaml-url-filters" [ref=e402]': write YAML filter URLs behind yaml-url-filters
+          - generic [ref=e403]:
+            - generic [ref=e404]: nobody asked
+            - generic "CI success" [ref=e405]
+            - generic "updated 11/4/2026, 5:46:54 PM" [ref=e406]: 2h
+        - generic [ref=e407]:
+          - generic [ref=e408]: Stack of 9
+          - generic [ref=e409]:
+            - generic "1/9 waiting" [ref=e410]
+            - generic "2/9 ship" [ref=e411]
+            - generic "3/9 waiting" [ref=e412]
+            - generic "4/9 waiting" [ref=e413]
+            - generic "5/9 waiting" [ref=e414]
+            - generic "6/9 waiting" [ref=e415]
+            - generic "7/9 waiting" [ref=e416]
+            - generic "8/9 waiting" [ref=e417]
+            - generic "9/9 waiting" [ref=e418]
+          - generic [ref=e419]: 8 here
+        - 'option "omni#68522 1/9 [stack 1/9] feat(calcs): add ai-calculations-decisions flag and DecisionProvider interface on @cmruderman CI success 6h" [ref=e420] [cursor=pointer]':
+          - generic [ref=e421]:
+            - generic [ref=e422]: omni#68522
+            - generic "stack of 9, bottom first" [ref=e423]: 1/9
+          - 'generic "[stack 1/9] feat(calcs): add ai-calculations-decisions flag and DecisionProvider interface" [ref=e424]'
+          - generic [ref=e425]:
+            - generic [ref=e426]: on @cmruderman
+            - generic "CI success" [ref=e427]
+            - generic "updated 11/4/2026, 1:54:43 PM" [ref=e428]: 6h
+        - 'option "omni#68526 3/9 [stack 3/9] feat(calcs): offer AI_ decision functions in place of JEV_ in the formula bar nobody asked CI success 6h" [ref=e429] [cursor=pointer]':
+          - generic [ref=e430]:
+            - generic [ref=e431]: omni#68526
+            - generic "stack of 9, bottom first" [ref=e432]: 3/9
+          - 'generic "[stack 3/9] feat(calcs): offer AI_ decision functions in place of JEV_ in the formula bar" [ref=e433]'
+          - generic [ref=e434]:
+            - generic [ref=e435]: nobody asked
+            - generic "CI success" [ref=e436]
+            - generic "updated 11/4/2026, 1:54:39 PM" [ref=e437]: 6h
+        - 'option "omni#68529 4/9 [stack 4/9] feat(calcs): add AI_PROVIDER to pick who answers an AI calc nobody asked CI success 6h" [ref=e438] [cursor=pointer]':
+          - generic [ref=e439]:
+            - generic [ref=e440]: omni#68529
+            - generic "stack of 9, bottom first" [ref=e441]: 4/9
+          - 'generic "[stack 4/9] feat(calcs): add AI_PROVIDER to pick who answers an AI calc" [ref=e442]'
+          - generic [ref=e443]:
+            - generic [ref=e444]: nobody asked
+            - generic "CI success" [ref=e445]
+            - generic "updated 11/4/2026, 1:53:09 PM" [ref=e446]: 6h
+        - 'option "omni#68524 5/9 [stack 5/9] feat(calcs): add OpenAI Decisions as a decisions provider on @jade-omni, @cmruderman CI success 6h" [ref=e447] [cursor=pointer]':
+          - generic [ref=e448]:
+            - generic [ref=e449]: omni#68524
+            - generic "stack of 9, bottom first" [ref=e450]: 5/9
+          - 'generic "[stack 5/9] feat(calcs): add OpenAI Decisions as a decisions provider" [ref=e451]'
+          - generic [ref=e452]:
+            - generic [ref=e453]: on @jade-omni, @cmruderman
+            - generic "CI success" [ref=e454]
+            - generic "updated 11/4/2026, 2:00:38 PM" [ref=e455]: 6h
+        - 'option "omni#68525 6/9 [stack 6/9] feat(ops): pass the OpenAI API key to the model service on @jade-omni, @cmruderman CI success 6h" [ref=e456] [cursor=pointer]':
+          - generic [ref=e457]:
+            - generic [ref=e458]: omni#68525
+            - generic "stack of 9, bottom first" [ref=e459]: 6/9
+          - 'generic "[stack 6/9] feat(ops): pass the OpenAI API key to the model service" [ref=e460]'
+          - generic [ref=e461]:
+            - generic [ref=e462]: on @jade-omni, @cmruderman
+            - generic "CI success" [ref=e463]
+            - generic "updated 11/4/2026, 1:30:27 PM" [ref=e464]: 6h
+        - button "→ 4 more" [ref=e465] [cursor=pointer]:
+          - generic [ref=e466]: →
+          - text: 4 more
+  - contentinfo [ref=e467]:
+    - generic [ref=e468]: 78 open PRs, 38 of them drafts · cards don't drag, GitHub sets the stage
+    - generic [ref=e469]:
+      - generic [ref=e470]:
+        - generic [ref=e471]: h j k l
+        - text: move
+      - generic [ref=e472]:
+        - generic [ref=e473]: ↵
+        - text: open
+      - generic [ref=e474]:
+        - generic [ref=e475]: o
+        - text: github
+      - generic [ref=e476]:
+        - generic [ref=e477]: ⇧R
+        - text: review
+      - generic [ref=e478]:
+        - generic [ref=e479]: x
+        - text: aside
+      - generic [ref=e480]:
+        - generic [ref=e481]: /
+        - text: filter
+      - generic [ref=e482]:
+        - generic [ref=e483]: v
+        - text: list
+      - generic [ref=e484]:
+        - generic [ref=e485]: "?"
+        - text: keys

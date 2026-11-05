@@ -3,13 +3,14 @@
 // drags: a stage comes from GitHub and the bug-hunt runs, so the button on a card is how it moves.
 import { findStacks } from './stacks.js';
 
+// Left to right in the order a PR moves. Blocked sits at the end: it's off the line until it's sorted.
 const STAGES = [
-  ['ship', 'Ship', 'approved, CI green, nothing in the way'],
-  ['undraft', 'Undraft', 'bug pass on this head, CI green, still a draft'],
-  ['fix', 'Fix findings', 'a bug pass ran, findings still open'],
-  ['blocked', 'Blocked', 'red CI, a conflict, or changes requested'],
   ['hunt', 'Hunt', 'no bug pass on the current head'],
+  ['fix', 'Fix findings', 'a bug pass ran, findings still open'],
+  ['undraft', 'Undraft', 'bug pass on this head, CI green, still a draft'],
   ['waiting', 'Waiting', 'on someone else'],
+  ['ship', 'Ship', 'approved, CI green, nothing in the way'],
+  ['blocked', 'Blocked', 'red CI, a conflict, or changes requested'],
 ];
 const NEEDS_YOU = ['ship', 'undraft', 'fix', 'blocked'];
 const SHOW = 8;
