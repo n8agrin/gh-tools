@@ -1640,7 +1640,7 @@ const drawTheme = () => ($('#theme').textContent = isDark() ? 'Dark' : 'Light');
 const toggleTheme = () => setTheme(isDark() ? 'light' : 'dark');
 
 // Reading faces for prose. Bookerly is Amazon's and can't be served from here, so it shows only if it's installed and falls back to Literata.
-const FONTS = [['serif', 'Source Serif'], ['garamond', 'Garamond'], ['bookerly', 'Bookerly'], ['mono', 'JetBrains Mono']];
+const FONTS = [['serif', 'Source Serif'], ['garamond', 'Garamond'], ['bookerly', 'Bookerly'], ['noto', 'Noto Sans'], ['mono', 'JetBrains Mono']];
 const fontNow = () => FONTS.find(([k]) => k === document.documentElement.dataset.font) ?? FONTS[0];
 const drawFont = () => ($('#font').textContent = fontNow()[1]);
 function nextFont() {
@@ -1675,7 +1675,7 @@ const KEYS = [
   [['m'], 'Show a markdown file rendered, or as a diff'],
   [['⇧S'], 'Submit your review: line comments, a summary, and comment, approve or request changes'],
   [['t'], 'Switch between dark and light'],
-  [['f'], 'Switch the reading font: Source Serif, Garamond, Bookerly, JetBrains Mono'],
+  [['f'], 'Switch the reading font: Source Serif, Garamond, Bookerly, Noto Sans, JetBrains Mono'],
   [['esc'], 'Back to the queue'],
   [['?'], 'Show or hide this list'],
 ];

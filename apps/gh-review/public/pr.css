@@ -30,6 +30,7 @@
 /* Press f to pick another reading face. Faces with a smaller or larger x-height get scaled to match Source Serif so the text doesn't jump in size. */
 :root[data-font="garamond"] .pr-page { --read: "EB Garamond", Garamond, Georgia, serif; --read-adjust: .475; }
 :root[data-font="bookerly"] .pr-page { --read: Bookerly, Literata, Georgia, serif; --read-adjust: .475; }
+:root[data-font="noto"] .pr-page { --read: "Noto Sans", "IBM Plex Sans", sans-serif; --read-adjust: .475; }
 :root[data-font="mono"] .pr-page { --read: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace; --read-adjust: .44; }
 .fnotes, .inote .nt, .purpose, .mreason, .mwhy, .mfixes, .how, .taste .q, .help, .other, .md, .msg.bot { font-family: var(--read); font-size-adjust: var(--read-adjust, none); font-optical-sizing: auto; font-variant-numeric: normal; }
 /* Run-in labels like "Check." stay in the UI face so they read as labels, not words in the sentence. */
