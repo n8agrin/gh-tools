@@ -28,6 +28,8 @@ export interface ReviewPR {
   headRef: string;
   /** The head commit, so a review run on an older one can show as stale. */
   headSha: string;
+  /** CONFLICTING when it can't merge into its base; null while GitHub is still working it out. */
+  mergeable: 'MERGEABLE' | 'CONFLICTING' | null;
   defaultBranch: string;
   /** GitHub's own stack, when the author made one. Holds every layer, not just the ones asking you. */
   stack: NativeStack | null;
@@ -73,7 +75,7 @@ export interface Queue {
 }
 
 const PR_FIELDS = `
-  id number title url isDraft createdAt updatedAt state
+  id number title url isDraft createdAt updatedAt state mergeable
   additions deletions changedFiles reviewDecision
   author { login }
   viewerLatestReview { state submittedAt }
@@ -155,6 +157,7 @@ export function toPR(n: any, viewer: string): ReviewPR {
     baseRef: n.baseRefName ?? '',
     headRef: n.headRefName ?? '',
     headSha: n.headRefOid ?? '',
+    mergeable: n.mergeable === 'CONFLICTING' || n.mergeable === 'MERGEABLE' ? n.mergeable : null,
     defaultBranch: n.repository.defaultBranchRef?.name ?? '',
     stack: n.stack
       ? {

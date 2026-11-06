@@ -62,8 +62,8 @@ const player = createPlayer((why) => {
 });
 addEventListener('pagehide', () => player.stop());
 
-// Your own PRs come back to My PRs instead of the review queue.
-const home = () => (state.pr?.mine ? '/mine' : '/');
+// Your own PRs come back to My PRs instead of the review queue, or to the board when that's where you came from.
+const home = () => (state.pr?.mine ? (sessionStorage.getItem('back') === '/board' ? '/board' : '/mine') : '/');
 
 $('#ref').textContent = `${name}#${number}`;
 $('#github').href = url;
@@ -1466,7 +1466,10 @@ async function load() {
   if (res.error) state.error = res.error;
   else (state.pr = res), (state.diffIds = await diffIds(res.files));
   if (state.pr?.mine && state.checks) state.checks = state.checks.filter((c) => !c.skipOnMine);
-  if (state.pr?.mine) ($('#back').href = '/mine'), ($('#back').textContent = '← My PRs'), ($('#back').title = 'Back to My PRs (esc)');
+  if (state.pr?.mine) {
+    const name = home() === '/board' ? 'Board' : 'My PRs';
+    ($('#back').href = home()), ($('#back').textContent = `← ${name}`), ($('#back').title = `Back to ${name} (esc)`);
+  }
   render();
   // Everyone's comments only add to the page, so a failure just leaves them out.
   fetch(`/api/comments?url=${encodeURIComponent(url)}`).then((r) => (r.ok ? r.json() : null)).then((g) => g?.lines && ((state.gh = g), render())).catch(() => {});

@@ -47,6 +47,11 @@ Your settings live in `~/.gh-review/config.json`, outside the repo. Without one 
 - `reviewedLabel`: a label that means someone already ran a bug pass. Leave it out if your team doesn't use one.
 - `defaultRepo`: which repo a bare PR number means when you import one. Defaults to the first repo under `checkouts`.
 - `browser`: the app to open GitHub links in, like `"Google Chrome"`. Defaults to your default browser.
+- `board`: `true` adds a Board link to My PRs (`b`). The board at `/board` works without it.
+
+## Board
+
+`/board` shows your own open PRs as a kanban with one column per pipeline stage, left to right in the order a PR moves: Hunt (no bug pass on the current head yet), Fix findings (a bug pass ran and left findings), Undraft (a clean bug pass on the current head, CI green, still a draft), Waiting (on someone else), Ship (approved, CI green, nothing in the way), and last Blocked (red CI, a conflict, or changes requested), which is off the line until it's sorted. A bug pass is a finished review run on the PR's current head with a findings check in it, or the `reviewedLabel` on the PR. Nothing on the board is set by hand and cards don't drag: a stage comes from GitHub, so the button on the selected card is how a PR moves. `h`, `j`, `k` and `l` walk the cards, `Enter` opens the PR page, `o` opens GitHub, where merging and undrafting happen, and `⇧R` runs a review.
 
 ## Keys
 

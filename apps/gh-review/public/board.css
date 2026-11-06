@@ -1,0 +1,58 @@
+/* The board: My PRs as a kanban, one column per pipeline stage. Cards don't drag, since GitHub
+   decides the stage; the button on a card is how it moves. Colors and type come from queue.css. */
+/* queue.css orders main after the panel; there is no panel here, so main goes back above the footer. */
+.board main { order: 0; flex: 1; min-height: 0; padding: 14px 20px 0; overflow: auto; scrollbar-width: thin; }
+.cols { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 12px; min-height: 100%; }
+.col { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-bottom: 16px; }
+.colh { display: flex; flex-direction: column; gap: 3px; padding: 0 2px 8px; border-bottom: 2px solid currentColor; }
+.colh .t { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.colh .t i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.colh .t .n { margin-left: auto; font-weight: 500; color: var(--muted); }
+.colh .d { font-size: 11.5px; line-height: 1.35; color: var(--muted); text-wrap: pretty; }
+.s-ship { color: var(--green); } .s-undraft { color: var(--edge); } .s-fix { color: var(--amber); } .s-blocked { color: var(--red); } .s-hunt { color: var(--muted); } .s-wait, .s-waiting { color: var(--faint); }
+
+.card { display: flex; flex-direction: column; gap: 6px; padding: 9px 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; scroll-margin: 60px 0 40px; }
+.card:hover { background: var(--hover); }
+.card[aria-selected="true"] { border-color: var(--edge); background: var(--sel); }
+.card .m1 { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: var(--muted); }
+.card .m1 .ref { flex-shrink: 0; }
+.card .m1 .stk { flex-shrink: 0; font-size: 10.5px; color: var(--edge); border: 1px solid color-mix(in srgb, var(--edge) 40%, transparent); border-radius: 3px; padding: 0 4px; line-height: 15px; white-space: nowrap; }
+.card .m1 .draft-tag { font-size: 9.5px; line-height: 14px; padding: 0 4px; }
+.card .ttl { font-size: 13px; line-height: 1.35; font-weight: 500; color: var(--strong); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card.draft .ttl { font-weight: 400; color: var(--text); }
+.card .m2 { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.card .m2 .note { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card .m2 .ci { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--line); }
+.card .m2 .ci.success { background: var(--green); } .card .m2 .ci.failure { background: var(--red); } .card .m2 .ci.pending { background: var(--amber); }
+.card .m2 .ag { margin-left: auto; }
+.card .busy { color: var(--amber); }
+.card .spin { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: -1px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--amber); animation: qspin .9s linear infinite; }
+/* The selected card opens up: why it's here, and the one thing to do about it. */
+.card .why { font-size: 12.5px; line-height: 1.45; color: var(--text); text-wrap: pretty; }
+.card .acts { display: flex; flex-direction: column; gap: 4px; }
+.card .acts button { display: flex; justify-content: space-between; align-items: center; gap: 8px; height: 28px; padding: 0 9px; font: inherit; font-size: 12.5px; text-align: left; white-space: nowrap; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.card .acts button:hover { background: var(--hover); }
+.card .acts button.primary { color: var(--bg); background: var(--strong); border-color: var(--strong); font-weight: 600; }
+.card .acts button kbd { font-size: 10.5px; }
+.card .acts button.primary kbd { color: inherit; border-color: transparent; opacity: .7; }
+.card .acts .row2 { display: flex; flex-wrap: wrap; gap: 4px; }
+.card .acts .row2 button { flex: 1 1 auto; justify-content: center; }
+
+/* Three or more cards from one stack in a column get a ladder line above them. */
+.ladder { display: flex; align-items: center; gap: 6px; padding: 4px 2px 0; font-size: 11px; color: var(--muted); }
+.ladder .pips { display: inline-flex; gap: 3px; }
+.ladder .pip { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; box-sizing: border-box; }
+.ladder .pip.full { background: currentColor; }
+.ladder .n { margin-left: auto; }
+.more { display: flex; gap: 6px; align-items: center; padding: 4px 2px; font-size: 12px; color: var(--faint); background: none; border: 0; cursor: pointer; text-align: left; }
+.more:hover { color: var(--text); }
+.col .empty { padding: 8px 2px; font-size: 12px; color: var(--faint); text-align: left; }
+
+header .needs { display: flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+header .needs span { display: flex; align-items: baseline; gap: 5px; padding: 3px 8px; font-size: 12px; color: var(--muted); }
+header .needs b { font-weight: 600; color: var(--strong); }
+header .needs i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; align-self: center; }
+
+@media (max-width: 900px) {
+  header .needs { display: none; }
+}
