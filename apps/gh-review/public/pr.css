@@ -25,6 +25,13 @@
 }
 .pr-page { height: 100vh; color: var(--text); font-family: "IBM Plex Sans", -apple-system, sans-serif; font-variant-numeric: tabular-nums; }
 .pr-page .mono, .pr-page kbd, .pr-page code, .pr-page .num { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+/* Prose you read (summaries, notes, the brief, Claude's replies) is set in a text serif; the UI around it stays in Plex Sans and code stays in Plex Mono. */
+.pr-page { --read: "Source Serif 4", "Iowan Old Style", Charter, Georgia, serif; }
+.fnotes, .inote .nt, .purpose, .mreason, .mwhy, .mfixes, .how, .taste .q, .help, .other, .md, .msg.bot { font-family: var(--read); font-optical-sizing: auto; font-variant-numeric: normal; }
+/* Run-in labels like "Check." stay in the UI face so they read as labels, not words in the sentence. */
+.fnotes > p > b:first-child, .inote .nt > b:first-child { font-family: "IBM Plex Sans", sans-serif; font-size: .9em; letter-spacing: .01em; }
+/* Code inside prose: smaller than the text, the text's own color, and a faint chip so each name reads as one unit. */
+.pr-page :is(.fnotes, .inote, .purpose, .mreason, .mwhy, .mfixes, .how, .taste, .help, .other, .md, .msg, .gaps) :not(pre) > code { font-size: .84em; color: inherit; background: var(--hover); border-radius: 3px; padding: .05em .25em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .pr-page .add { color: var(--add); }
 .pr-page .del { color: var(--del); }
 .faint { color: var(--faint); }
@@ -103,7 +110,7 @@ button.hidden-note:hover { color: var(--text); }
 .meta .bad { color: var(--red); }
 .meta .direct { color: var(--text); }
 .meta code { font-size: 12px; color: var(--text); }
-.purpose { margin: 6px 0 0; font-size: 16.5px; line-height: 1.6; color: var(--fg); text-wrap: pretty; }
+.purpose { margin: 6px 0 0; font-size: 18px; line-height: 1.55; max-width: 68ch; color: var(--fg); text-wrap: pretty; }
 .stack { display: inline-flex; gap: 6px; align-items: center; }
 .stack a { color: var(--text); text-decoration: none; }
 .pips { display: inline-flex; gap: 4px; align-items: center; }
@@ -131,10 +138,9 @@ button.hidden-note:hover { color: var(--text); }
 .mcall .mword { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; line-height: 1.2; }
 .mcall .mword i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
 .mcall .msub { font-size: 14px; color: var(--muted); }
-.mreason { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--fg); text-wrap: pretty; }
-.mreason code { font-size: 13px; }
-.mwhy { margin: 0; font-size: 15px; line-height: 1.65; text-wrap: pretty; }
-.mfixes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.6; }
+.mreason { margin: 0; font-size: 17px; line-height: 1.6; max-width: 68ch; color: var(--fg); text-wrap: pretty; }
+.mwhy { margin: 0; font-size: 16.5px; line-height: 1.65; max-width: 68ch; text-wrap: pretty; }
+.mfixes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 16.5px; line-height: 1.6; max-width: 68ch; }
 .riskwhy { font-size: 13.5px; color: var(--muted); text-wrap: pretty; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
@@ -202,34 +208,34 @@ pre.err { color: var(--red); font-size: 12px; white-space: pre-wrap; margin: 4px
 .gaps p { margin: 0; text-wrap: pretty; }
 .gaps b { color: var(--fg); font-weight: 600; }
 .gaps .ok { color: var(--muted); }
-.how { display: flex; flex-direction: column; gap: 14px; font-size: 15.5px; line-height: 1.65; }
+.how { display: flex; flex-direction: column; gap: 14px; font-size: 17px; line-height: 1.65; max-width: 68ch; }
 .how p { margin: 0; text-wrap: pretty; }
-.ref-l { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line); white-space: nowrap; }
+.ref-l { font-family: "IBM Plex Sans", sans-serif; font-size: 13px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line); white-space: nowrap; }
 .taste { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 16px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); }
 .taste .lens { font-size: 12.5px; font-weight: 500; color: var(--muted); padding-top: 3px; }
-.taste .q { display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.6; }
+.taste .q { display: flex; flex-direction: column; gap: 6px; font-size: 16.5px; line-height: 1.6; max-width: 68ch; }
 .taste .q p { margin: 0; text-wrap: pretty; }
 .taste .q p:first-child { color: var(--fg); }
-.taste .q p + p { font-size: 14px; }
+.taste .q p + p { font-size: 15.5px; }
 .taste .links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .taste-sub { display: block; margin: 16px 0 4px; }
-.help { display: flex; flex-direction: column; gap: 14px; font-size: 15.5px; line-height: 1.65; }
+.help { display: flex; flex-direction: column; gap: 14px; font-size: 17px; line-height: 1.65; max-width: 68ch; }
 .help p { margin: 0; text-wrap: pretty; }
 .help .stake { color: var(--muted); }
 .help .ask { display: flex; flex-direction: column; gap: 4px; }
-.help .ask .why { font-size: 14px; color: var(--muted); }
+.help .ask .why { font-size: 15.5px; color: var(--muted); }
 .cta { display: flex; align-items: center; gap: 14px; padding-top: 6px; font-size: 13px; color: var(--muted); }
 .cta .btn { font-size: 14px; padding: 9px 14px; }
-.other { font-size: 14.5px; line-height: 1.65; }
+.other { font-size: 16px; line-height: 1.65; max-width: 72ch; }
 
 /* Rendered markdown and step bodies. */
-.md { font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
-.md h2, .md h3, .md h4 { font-size: 14.5px; margin: 16px 0 6px; color: var(--fg); }
-.md h5, .md h6 { font-size: 13.5px; margin: 12px 0 4px; }
+.md { font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.md h2, .md h3, .md h4 { font-size: 16px; margin: 16px 0 6px; color: var(--fg); }
+.md h5, .md h6 { font-size: 15px; margin: 12px 0 4px; }
 .md p { margin: 6px 0; }
 .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
 .md li.nested { margin-left: 18px; }
-.md code, .other code, .how code, .gaps code, .taste code, .fnote code, .note code { font-size: .92em; color: var(--fg); }
+.md pre code { font-size: 13px; }
 .md pre { background: var(--panel); border-radius: 4px; padding: 8px 10px; overflow-x: auto; }
 .md blockquote { margin: 4px 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
 .md img { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; }
@@ -246,11 +252,11 @@ pre.err { color: var(--red); font-size: 12px; white-space: pre-wrap; margin: 4px
 .fhead .n { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; white-space: nowrap; }
 .fhead .lvl { font-size: 12.5px; white-space: nowrap; }
 .fhead .acts { display: flex; align-items: center; gap: 8px; }
-.fnotes { padding: 20px 28px 8px; display: flex; flex-direction: column; gap: 12px; max-width: 76ch; font-size: 15px; line-height: 1.6; }
+.fnotes { padding: 22px 28px 10px; display: flex; flex-direction: column; gap: 14px; max-width: calc(68ch + 56px); font-size: 17px; line-height: 1.58; }
 .fnotes p { margin: 0; text-wrap: pretty; }
 .fnotes b { color: var(--fg); font-weight: 600; }
-.fnotes .at { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--muted); }
-.fnotes .faint { font-size: 13.5px; }
+.fnotes .at { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); white-space: nowrap; margin-left: .25em; }
+.fnotes .faint { font-size: 15px; }
 .diff { margin: 14px 28px 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 21px; }
 .diff + .diff { margin-top: 12px; }
 .hh { display: flex; justify-content: space-between; gap: 10px; padding: 5px 12px; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--muted); }
@@ -264,7 +270,7 @@ pre.err { color: var(--red); font-size: 12px; white-space: pre-wrap; margin: 4px
 .dl.d .s { color: var(--del); }
 .dl .c { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
 .dl.a .c, .dl.d .c { color: var(--text); }
-.inote { margin: 4px 12px 8px 128px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.inote { margin: 4px 12px 8px 128px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: "IBM Plex Sans", sans-serif; font-size: 15px; line-height: 1.55; color: var(--text); }
 .inote b { color: var(--fg); font-weight: 600; }
 .inote { display: flex; align-items: baseline; gap: 12px; }
 .inote .nt { flex: 1; min-width: 0; }
@@ -304,11 +310,11 @@ footer .ks > span { display: flex; gap: 3px; align-items: center; }
 .chat-head button { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 4px; padding: 2px 6px; cursor: pointer; }
 .chat-head button:hover { color: var(--fg); background: var(--hover); }
 #chat-log { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
-.msg { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.msg { font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
 .msg.me { align-self: flex-end; max-width: 88%; background: var(--sel); border-radius: 4px; padding: 8px 12px; color: var(--fg); }
 .msg.me p { margin: 2px 0; }
 .msg.me blockquote { margin: 2px 0; padding-left: 8px; border-left: 3px solid var(--line); color: var(--muted); }
-.msg.bot .md { font-size: 14px; }
+.msg.bot .md { font-size: 15.5px; }
 .msg.failed .md { color: var(--muted); }
 .activity { font-size: 12px; color: var(--faint); font-family: "IBM Plex Mono", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-empty { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
