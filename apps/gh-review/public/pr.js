@@ -1639,6 +1639,19 @@ const isDark = () => (document.documentElement.dataset.theme ?? (matchMedia('(pr
 const drawTheme = () => ($('#theme').textContent = isDark() ? 'Dark' : 'Light');
 const toggleTheme = () => setTheme(isDark() ? 'light' : 'dark');
 
+// Reading faces for prose. Bookerly is Amazon's and can't be served from here, so it shows only if it's installed and falls back to Literata.
+const FONTS = [['serif', 'Source Serif'], ['garamond', 'Garamond'], ['bookerly', 'Bookerly'], ['mono', 'JetBrains Mono']];
+const fontNow = () => FONTS.find(([k]) => k === document.documentElement.dataset.font) ?? FONTS[0];
+const drawFont = () => ($('#font').textContent = fontNow()[1]);
+function nextFont() {
+  const [key, name] = FONTS[(FONTS.indexOf(fontNow()) + 1) % FONTS.length];
+  if (key === 'serif') delete document.documentElement.dataset.font;
+  else document.documentElement.dataset.font = key;
+  try { key === 'serif' ? localStorage.removeItem('prFont') : localStorage.setItem('prFont', key); } catch {}
+  drawFont();
+  status(`Reading font: ${name}`);
+}
+
 const KEYS = [
   [['j', '↓'], 'Next file'],
   [['k', '↑'], 'Previous file'],
@@ -1662,6 +1675,7 @@ const KEYS = [
   [['m'], 'Show a markdown file rendered, or as a diff'],
   [['⇧S'], 'Submit your review: line comments, a summary, and comment, approve or request changes'],
   [['t'], 'Switch between dark and light'],
+  [['f'], 'Switch the reading font: Source Serif, Garamond, Bookerly, JetBrains Mono'],
   [['esc'], 'Back to the queue'],
   [['?'], 'Show or hide this list'],
 ];
@@ -1736,6 +1750,7 @@ document.addEventListener('keydown', (e) => {
     x: () => setAside(),
     u: () => undo(),
     t: toggleTheme,
+    f: nextFont,
     '?': () => ((state.help = true), renderHelp()),
   }[e.key];
   if (fn) (e.preventDefault(), fn());
@@ -1746,6 +1761,8 @@ if (pending) sessionStorage.removeItem('toast');
 $('#github').addEventListener('click', (e) => (e.preventDefault(), post('/api/open', { url })));
 $('#theme').addEventListener('click', toggleTheme);
 drawTheme();
+$('#font').addEventListener('click', nextFont);
+drawFont();
 
 $('#side').addEventListener('click', (e) => {
   if (e.target.id === 'show-routine') return (state.showRoutine = true), render();

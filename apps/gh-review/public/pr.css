@@ -27,7 +27,11 @@
 .pr-page .mono, .pr-page kbd, .pr-page code, .pr-page .num { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
 /* Prose you read (summaries, notes, the brief, Claude's replies) is set in a text serif; the UI around it stays in Plex Sans and code stays in Plex Mono. */
 .pr-page { --read: "Source Serif 4", "Iowan Old Style", Charter, Georgia, serif; }
-.fnotes, .inote .nt, .purpose, .mreason, .mwhy, .mfixes, .how, .taste .q, .help, .other, .md, .msg.bot { font-family: var(--read); font-optical-sizing: auto; font-variant-numeric: normal; }
+/* Press f to pick another reading face. Faces with a smaller or larger x-height get scaled to match Source Serif so the text doesn't jump in size. */
+:root[data-font="garamond"] .pr-page { --read: "EB Garamond", Garamond, Georgia, serif; --read-adjust: .475; }
+:root[data-font="bookerly"] .pr-page { --read: Bookerly, Literata, Georgia, serif; --read-adjust: .475; }
+:root[data-font="mono"] .pr-page { --read: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace; --read-adjust: .44; }
+.fnotes, .inote .nt, .purpose, .mreason, .mwhy, .mfixes, .how, .taste .q, .help, .other, .md, .msg.bot { font-family: var(--read); font-size-adjust: var(--read-adjust, none); font-optical-sizing: auto; font-variant-numeric: normal; }
 /* Run-in labels like "Check." stay in the UI face so they read as labels, not words in the sentence. */
 .fnotes > p > b:first-child, .inote .nt > b:first-child { font-family: "IBM Plex Sans", sans-serif; font-size: .9em; letter-spacing: .01em; }
 /* Code inside prose: smaller than the text, the text's own color, and a faint chip so each name reads as one unit. */
@@ -53,7 +57,7 @@ button.link { font: inherit; color: var(--text); background: none; border: 0; pa
 #htitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--fg); }
 .hright { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); }
 .pr-page .gh { font-size: 12.5px; color: var(--muted); }
-#theme { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+#theme, #font { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 
 #split { flex: 1; display: flex; min-height: 0; }
 
