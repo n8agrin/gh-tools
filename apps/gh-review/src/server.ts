@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getOverrides, getSkipped, listDone, listImported, markDone, reviewSummaries, saveMine, saveQueue, setMineAside, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
 import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
@@ -60,7 +60,7 @@ const server = Bun.serve({
       }
       if (pathname === '/api/mine') {
         // Your own PRs, on their own page with their own cache and set-aside list. The board reads the same answer, plus a stage per PR.
-        const extra = async (prs: MyPR[]) => ({ aside: getMineAside(), actions: await loadActions(), reviews: reviewSummaries(), live: liveReviews(), stages: await stagesFor(prs), ...(await pageConfig()) });
+        const extra = async (prs: MyPR[]) => ({ aside: getMineAside(), done: getMineDone(), actions: await loadActions(), reviews: reviewSummaries(), live: liveReviews(), stages: await stagesFor(prs), ...(await pageConfig()) });
         if (new URL(req.url).searchParams.has('cached')) {
           const cached = cachedMine() ?? { prs: [], viewer: '', fetchedAt: null };
           return json({ ...cached, ...(await extra(cached.prs)) });
@@ -126,6 +126,11 @@ const server = Bun.serve({
         }
         if (pathname === '/api/mine/aside') {
           setMineAside(body.url, body.updatedAt ?? null);
+          return json({ ok: true });
+        }
+        if (pathname === '/api/mine/done') {
+          // Local only: clears your own PR off My PRs until a new commit lands. Nothing goes to GitHub.
+          setMineDone(String(body.url ?? ''), typeof body.headSha === 'string' ? body.headSha : null);
           return json({ ok: true });
         }
         if (pathname === '/api/findings/post') {

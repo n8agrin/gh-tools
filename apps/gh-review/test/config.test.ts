@@ -30,9 +30,9 @@ test('prompt paths are relative to the app unless absolute or under ~', () => {
 
 test('the pages get the bug-pass label and the default repo from your config', async () => {
   writeFileSync(file, JSON.stringify({ checkouts: { 'a/b': '~/b', 'c/d': '~/d' }, checks: [] }));
-  expect(await pageConfig()).toEqual({ reviewedLabel: null, defaultRepo: 'a/b', board: false });
-  writeFileSync(file, JSON.stringify({ checkouts: { 'a/b': '~/b' }, checks: [], reviewedLabel: 'bug-pass', defaultRepo: 'c/d', board: true }));
-  expect(await pageConfig()).toEqual({ reviewedLabel: 'bug-pass', defaultRepo: 'c/d', board: true });
+  expect(await pageConfig()).toEqual({ reviewedLabel: null, defaultRepo: 'a/b' });
+  writeFileSync(file, JSON.stringify({ checkouts: { 'a/b': '~/b' }, checks: [], reviewedLabel: 'bug-pass', defaultRepo: 'c/d' }));
+  expect(await pageConfig()).toEqual({ reviewedLabel: 'bug-pass', defaultRepo: 'c/d' });
 });
 
 test('the example config names nobody\'s repos, labels or skills', async () => {

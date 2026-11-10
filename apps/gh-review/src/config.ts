@@ -49,8 +49,6 @@ export interface Config {
   danger?: string[];
   /** The app to open GitHub links in, like "Google Chrome". Defaults to your default browser. */
   browser?: string;
-  /** Show the Board link on My PRs: your PRs as a kanban, one column per pipeline stage. /board works either way. */
-  board?: boolean;
   checks: Check[];
   /** Paths that make a PR red whatever the AI says. */
   red?: RedPath[];
@@ -74,7 +72,7 @@ export async function loadConfig(): Promise<Config> {
 /** What the pages need from your config. */
 export async function pageConfig() {
   const c = await loadConfig();
-  return { reviewedLabel: c.reviewedLabel ?? null, defaultRepo: c.defaultRepo ?? Object.keys(c.checkouts ?? {}).find((r) => r !== 'owner/repo') ?? null, board: !!c.board };
+  return { reviewedLabel: c.reviewedLabel ?? null, defaultRepo: c.defaultRepo ?? Object.keys(c.checkouts ?? {}).find((r) => r !== 'owner/repo') ?? null };
 }
 
 /** Used when your config doesn't list danger areas. */
