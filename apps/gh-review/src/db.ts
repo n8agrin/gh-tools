@@ -39,6 +39,7 @@ function open(): Database {
     CREATE TABLE IF NOT EXISTS chats (pr_url TEXT PRIMARY KEY, session_id TEXT, dir TEXT NOT NULL, head_sha TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mine (url TEXT PRIMARY KEY, data TEXT NOT NULL, seen_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mine_aside (url TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS mine_done (url TEXT PRIMARY KEY, head_sha TEXT NOT NULL, done_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT, pr_url TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       status TEXT NOT NULL, at TEXT NOT NULL
@@ -130,6 +131,18 @@ export function getMineAside(): Record<string, string> {
 export function setMineAside(url: string, updatedAt: string | null) {
   if (updatedAt) open().run('INSERT OR REPLACE INTO mine_aside (url, updated_at) VALUES (?, ?)', [url, updatedAt]);
   else open().run('DELETE FROM mine_aside WHERE url = ?', [url]);
+}
+
+/** Your own PRs marked done, by url: the head they were done on, and when. */
+export function getMineDone(): Record<string, { headSha: string; doneAt: string }> {
+  const rows = open().query<{ url: string; head_sha: string; done_at: string }, []>('SELECT url, head_sha, done_at FROM mine_done').all();
+  return Object.fromEntries(rows.map((r) => [r.url, { headSha: r.head_sha, doneAt: r.done_at }]));
+}
+
+/** Done on your own PR holds until a new commit lands. A null head puts it back. */
+export function setMineDone(url: string, headSha: string | null, at = new Date().toISOString()) {
+  if (headSha !== null) open().run('INSERT OR REPLACE INTO mine_done (url, head_sha, done_at) VALUES (?, ?, ?)', [url, headSha, at]);
+  else open().run('DELETE FROM mine_done WHERE url = ?', [url]);
 }
 
 /** Pull a PR into the queue by hand. Importing again restarts its age. */

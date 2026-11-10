@@ -8,8 +8,8 @@ Local review queue for PRs where someone asked for your review. Anyone should be
 - Settings live in `~/.gh-review/config.json` (read by `src/config.ts`), not in the repo. `config.example.json` is the starting point and the fallback, so keep it free of anyone's own repos or skills.
 - Per-PR Claude work belongs in the config's `actions`, or its `checks` plus `prompts/` for Run review, not in the server.
 - Review runs are read-only against GitHub. Keep `bin/readonly/` first on their PATH and the write tools denied.
-- `/mine` (My PRs) lists your own open PRs with its own cache and set-aside tables (`mine`, `mine_aside`). Keep it apart from the review queue: nothing it does should change what `/` shows.
-- `/board` shows the same PRs as a kanban, one column per pipeline stage. The stage rules live in `src/stage.ts` and read only GitHub fields plus the review runs kept here; nothing on the board is set by hand, and cards never drag. The My PRs link to it is behind `"board": true` in the config.
+- `/mine` (My PRs) lists your own open PRs with its own cache, set-aside and done tables (`mine`, `mine_aside`, `mine_done`). Done there holds until a new commit lands; set aside until any change. Keep it apart from the review queue: nothing it does should change what `/` shows.
+- `/board` shows the same PRs as a kanban, one column per pipeline stage. The stage rules live in `src/stage.ts` and read only GitHub fields plus the review runs kept here; nothing on the board is set by hand, and cards never drag.
 - A check with `"findings": true` writes findings to `$GH_REVIEW_FINDINGS` (`src/findings.ts`). On your own PRs only, the PR page posts the ones you pick as one review, after a click and a confirm. Don't tie this to any one tool.
 - `bun test` runs against `test/fixture.json`; regenerate it with `bun test/make-fixture.ts`.
 - `public/followup.js` spots threads that put work off and drafts a follow-up issue. The PR page files it in the PR's repo through `createIssue()` only after File issue and a confirm.

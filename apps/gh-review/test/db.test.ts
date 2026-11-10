@@ -76,6 +76,9 @@ test('your own PRs never touch the review queue', () => {
   expect(db.getSkipped()[mpr(2).url]).toBeUndefined();
   expect(db.cachedMine()!.prs.map((p) => p.number)).toEqual([2]);
   expect(db.getMineAside()[mpr(2).url]).toBe('2026-10-22T01:00:00Z');
+  db.setMineDone(mpr(2).url, 'sha2', '2026-10-22T02:00:00Z');
+  expect(db.getMineDone()[mpr(2).url]).toEqual({ headSha: 'sha2', doneAt: '2026-10-22T02:00:00Z' });
+  expect(db.listDone().some((d) => d.pr.url === mpr(2).url)).toBe(false);
   // Review runs and actions find a PR in either list.
   expect(db.cachedPR(mpr(1).url)?.number).toBe(1);
   expect(db.cachedPR(mpr(2).url)?.number).toBe(2);
