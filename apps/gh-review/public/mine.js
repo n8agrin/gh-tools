@@ -97,6 +97,7 @@ function row(p, stack) {
   const bar = live ? `<span class="livebar"><i style="width:${Math.round((live.done / Math.max(1, live.total)) * 100)}%"></i></span>` : '';
   return `
   <div class="row grid${p.isDraft ? ' draft' : ''}${isAside(p) ? ' aside' : ''}${state.picked.includes(p.url) ? ' picked' : ''}" role="option" data-url="${esc(p.url)}" aria-selected="${p.url === state.selected}">
+    <span class="check" title="Select  space" data-pick>${state.picked.includes(p.url) ? '✓' : ''}</span>
     <span class="state-dot" title="${p.isDraft ? 'Draft' : 'Ready for review'}"></span>
     <span class="repo mono" title="${esc(p.repo)}">${esc(p.repo.split('/')[1])}</span>
     <span class="pr">${p.isDraft ? '<span class="tag draft-tag">Draft</span>' : ''}<span class="subject ell" title="${esc(p.title)}">${esc(subject)}</span>${stack ? `<span class="tag mono">${stack.index + 1}/${stack.size}</span>` : ''}</span>
@@ -119,7 +120,7 @@ function drawSections(sections, stacks) {
     .join('');
 }
 
-const HEAD = `<div class="head grid cap"><span></span><span>Repo</span><span>Pull request</span><span class="status">Status</span><span class="cm r" title="Comments">Cm</span><span class="size r">Size</span><span>CI</span><span class="r" title="Since the last update">Upd</span></div>`;
+const HEAD = `<div class="head grid cap"><span></span><span></span><span>Repo</span><span>Pull request</span><span class="status">Status</span><span class="cm r" title="Comments">Cm</span><span class="size r">Size</span><span>CI</span><span class="r" title="Since the last update">Upd</span></div>`;
 
 // A 5xx is GitHub timing out, not your login, so only point at the token for auth errors.
 const errorHint = (err) =>
@@ -219,7 +220,7 @@ const KEYS = [
   [['↵'], 'Open the PR page (a click does the same)'],
   [['o'], 'Open the PR on GitHub'],
   [['⇧R'], 'Run review on the PR'],
-  [['space'], 'Select or unselect this PR. Done and set aside then apply to every selected PR'],
+  [['space'], 'Select or unselect this PR (or click its checkbox). Done and set aside then apply to every selected PR'],
   [['a'], 'Select every PR in the list, or none'],
   [['e'], 'Mark the PR done until a new commit lands (or, in Done, put it back)'],
   [['v'], 'Show the PRs you marked done, or go back'],
@@ -262,6 +263,8 @@ function render() {
   $('#fetched').title = stale ? state.error : '';
   $('#fetched').classList.toggle('stale', !!stale);
   $('#theme').textContent = state.theme === 'dark' ? 'Light' : 'Dark';
+  $('#done').hidden = !state.picked.length;
+  $('#done').textContent = `${state.showDone ? 'Put back' : 'Mark done'} (${state.picked.length})`;
   renderList(v);
   renderRail(v);
   const drafts = open.filter((p) => p.isDraft).length;
@@ -319,6 +322,11 @@ function openGitHub(p = current()) {
   if (!p) return;
   post('/api/open', { url: p.url });
   say(`Opened #${p.number} on GitHub`);
+}
+
+function togglePick(url) {
+  state.picked = state.picked.includes(url) ? state.picked.filter((u) => u !== url) : [...state.picked, url];
+  render();
 }
 
 // After rows leave the list, land on the first row below where they were.
@@ -435,7 +443,7 @@ document.addEventListener('keydown', (e) => {
     Enter: () => openPage(),
     o: () => openGitHub(),
     R: () => review(),
-    ' ': () => state.selected && ((state.picked = state.picked.includes(state.selected) ? state.picked.filter((u) => u !== state.selected) : [...state.picked, state.selected]), render()),
+    ' ': () => state.selected && togglePick(state.selected),
     a: () => {
       const { all } = visible();
       state.picked = state.picked.length === all.length ? [] : all.map((p) => p.url);
@@ -461,10 +469,12 @@ document.addEventListener('keydown', (e) => {
 });
 
 $('#search').addEventListener('input', (e) => ((state.filter = e.target.value), render()));
+$('#done').addEventListener('click', () => markDone());
 $('#theme').addEventListener('click', () => setTheme(state.theme === 'dark' ? 'light' : 'dark'));
 $('#list').addEventListener('click', (e) => {
   const r = e.target.closest('.row');
   if (!r) return;
+  if (e.target.closest('[data-pick]')) return togglePick(r.dataset.url);
   state.selected = r.dataset.url;
   openPage(current());
 });
