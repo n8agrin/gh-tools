@@ -388,7 +388,7 @@ function drawerHtml() {
     .join('');
   const n = state.extras.size;
   const sameHead = r && state.pr && r.headSha === state.pr.headSha;
-  const sel = r ? `<button class="btn" id="run-sel" type="button" ${busy || !n || !sameHead ? 'disabled' : ''} title="${sameHead ? 'Runs only the ticked steps and keeps the rest of this run' : 'The PR has new commits since this run, so run everything'}">${n ? `Run ${n} selected` : 'Run selected'}</button>` : '';
+  const sel = r ? `<button class="btn" id="run-sel" type="button" ${busy || !n ? 'disabled' : ''} title="${sameHead ? 'Runs only the ticked steps and keeps the rest of this run' : 'The PR has new commits since this run, so this runs only the ticked steps at the new head'}">${n ? `Run ${n} selected` : 'Run selected'}</button>` : '';
   const main = live ? `<button class="btn stop" type="button" id="stop-run" title="Stop every step and clean up">Cancel run</button>` : `<button class="btn primary" type="button" id="run" ${state.starting ? 'disabled' : ''}>${state.starting ? 'Starting…' : r ? 'Run everything' : 'Run review'}<kbd>⇧R</kbd></button>`;
   const pick = state.reviews.length > 1 ? `<select id="pick">${state.reviews.map((x) => `<option value="${x.id}" ${x.id === r?.id ? 'selected' : ''}>Run ${x.id} · ${when(x.startedAt)} · ${x.error === STOPPED ? 'stopped' : x.status}</option>`).join('')}</select>` : '';
   const hints = state.optional.filter((o) => o.hint && state.extras.has(o.key)).map((o) => `<p class="rd-foot">${esc(o.label)}: ${esc(o.hint)}</p>`).join('');
