@@ -212,7 +212,7 @@ footer {
 .facts .busy { color: var(--amber); }
 
 /* My PRs. Drafts get a dashed edge, a hollow dot, a dashed Draft tag and a quieter title, so they read apart at a glance. */
-.mine .grid { grid-template-columns: 10px 64px minmax(0, 3fr) minmax(0, .9fr) 28px 84px 40px 30px; }
+.mine .grid { grid-template-columns: 15px 10px 64px minmax(0, 3fr) minmax(0, .9fr) 28px 84px 40px 30px; }
 .mine .repo { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .state-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
 .row.draft .state-dot { background: transparent; border: 1.5px dashed var(--muted); }
@@ -222,6 +222,6 @@ footer {
 .draft-tag { color: var(--amber); border: 1px dashed var(--amber); text-transform: uppercase; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; }
 .draft-word { color: var(--amber); font-weight: 500; }
 @media (max-width: 640px) {
-  .mine .grid { grid-template-columns: 10px minmax(0, 1fr) 40px 30px; }
-  .mine .grid > .repo, .mine .head > span:nth-child(2) { display: none; }
+  .mine .grid { grid-template-columns: 15px 10px minmax(0, 1fr) 40px 30px; }
+  .mine .grid > .repo, .mine .head > span:nth-child(3) { display: none; }
 }
