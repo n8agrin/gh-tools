@@ -74,3 +74,12 @@ test('reads a PR to import from a link, owner/repo#n, or a bare number', async (
   expect(parsePRRef('pivot totals')).toBeNull();
   expect(parsePRRef('https://github.com/acme/app/issues/5')).toBeNull();
 });
+
+test('reads the issues a PR closes, cutting long bodies', async () => {
+  const { toLinkedIssues } = await import('../src/github');
+  const res = { data: { repository: { pullRequest: { closingIssuesReferences: { nodes: [{ number: 74056, title: 'Route lookups through the memo', url: 'https://github.com/o/r/issues/74056', body: 'x'.repeat(9000), repository: { nameWithOwner: 'o/r' } }] } } } } };
+  const [i] = toLinkedIssues(res);
+  expect(i).toMatchObject({ repo: 'o/r', number: 74056, title: 'Route lookups through the memo' });
+  expect(i.body).toHaveLength(8000);
+  expect(toLinkedIssues({ data: { repository: null } })).toEqual([]);
+});

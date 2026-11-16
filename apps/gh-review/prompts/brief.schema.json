@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "lane": { "type": "string", "enum": ["approve", "answer", "read", "block"] },
+    "intent": { "type": "string", "description": "what changes for a user or caller, one sentence" },
+    "kind": { "type": "string", "description": "one or two words, like perf refactor" },
+    "behavior_change": { "type": "string", "description": "any behavior that changes, or none intended" },
+    "decisions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "stake": { "type": "string" },
+          "why_you": { "type": "string" },
+          "where": { "type": "string", "description": "path:line or path:start-end at the PR head" }
+        },
+        "required": ["question", "stake", "why_you", "where"]
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "claim": { "type": "string" },
+          "source": { "type": "string", "enum": ["issue", "description", "agent"] },
+          "status": { "type": "string", "enum": ["verified", "deliberate", "author_data", "unverified", "not_done", "contradicted"] },
+          "evidence": { "type": "string" },
+          "where": { "type": "string" },
+          "proof": { "type": "boolean" }
+        },
+        "required": ["claim", "source", "status", "evidence", "where", "proof"]
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string", "enum": ["core", "pattern", "tests", "other"] },
+          "title": { "type": "string" },
+          "note": { "type": "string" },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "outliers": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["kind", "title", "note", "files", "outliers"]
+      }
+    },
+    "raises": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "why": { "type": "string" }, "quote": { "type": "string" }, "where": { "type": "string" } },
+        "required": ["why", "quote", "where"]
+      }
+    },
+    "lowers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "why": { "type": "string" }, "quote": { "type": "string" }, "where": { "type": "string" } },
+        "required": ["why", "quote", "where"]
+      }
+    },
+    "fixes": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": { "fix": { "type": "string" }, "where": { "type": "string" } },
+        "required": ["fix", "where"]
+      }
+    }
+  },
+  "required": ["lane", "intent", "kind", "behavior_change", "decisions", "claims", "groups", "raises", "lowers", "fixes"]
+}

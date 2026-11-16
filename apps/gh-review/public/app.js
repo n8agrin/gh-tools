@@ -31,6 +31,7 @@ const state = {
   loading: true,
   sort: stored('sort') ?? 'oldest',
   directOnly: stored('directOnly') === '1',
+  lane: null, // l cycles: only PRs the brief put in one lane
   showSkipped: false,
   done: [], // { pr, reason, doneAt }, newest first
   reviews: {}, // url -> { minutes, color, reason, headSha, override } from the newest local review run
@@ -121,7 +122,7 @@ function visible() {
   }
   // Drafts sink below ready PRs in every sort: they want early eyes, not a sign-off.
   const rows = state.prs
-    .filter((p) => !doneEntry(p) && matches(p) && (!state.directOnly || p.requestedVia === 'direct'))
+    .filter((p) => !doneEntry(p) && matches(p) && (!state.directOnly || p.requestedVia === 'direct') && (!state.lane || laneOf(p)?.lane === state.lane))
     .sort((a, b) => a.isDraft - b.isDraft || SORTS[state.sort].fn(a, b));
   // Stacks come from every PR, so a filter or a set-aside layer doesn't change what a stack is.
   const stacks = findStacks(state.prs);
@@ -161,6 +162,16 @@ const mins = (s) => (s < 60 ? `${Math.round(s)}s` : `${Math.round(s / 60)}m`);
 
 const busy = (p) => !!state.live[p.url] || state.reviewing.has(p.url) || state.runs.some((r) => r.prUrl === p.url && r.status === 'running');
 
+// The brief's lane for a PR, when its newest run had one. A brief on an older head is stale.
+const LANE = { approve: 'Agent approves', answer: 'Answer questions', read: 'Read it', block: 'Do not merge' };
+const LANE_COLOR = { approve: 'green', answer: 'yellow', read: 'red', block: 'red' };
+function laneOf(p) {
+  const r = state.reviews[p.url];
+  if (!r?.lane) return null;
+  return { lane: r.lane, intent: r.intent, decisions: r.decisions ?? [], stale: !!(r.headSha && p.headSha && r.headSha !== p.headSha) };
+}
+const laneWord = (l) => (l.lane === 'answer' ? `${l.decisions.length || 1} q` : l.lane === 'approve' ? 'agent ok' : l.lane);
+
 // The review run's color, with your override winning. A run on an older head is stale.
 function signalOf(p) {
   const r = state.reviews[p.url];
@@ -185,7 +196,11 @@ function row(p, stack) {
   const st = flags(p);
   const picked = state.picked.includes(p.url);
   // Only red and yellow earn space in the row; green is the normal case and shows in the panel.
-  const badge = sig && sig.color !== 'green' ? `<span class="sig ${sig.color}${sig.stale ? ' stale' : ''}" title="${esc(sig.reason)}">${sig.color}</span>` : '';
+  const ln = laneOf(p);
+  // A brief's lane shows on every row, approve included, since that lane is the one you can clear in bulk.
+  const badge = ln && !state.reviews[p.url]?.override
+    ? `<span class="sig ${LANE_COLOR[ln.lane]}${ln.stale ? ' stale' : ''}" title="${esc(`${LANE[ln.lane]}${ln.intent ? `: ${ln.intent}` : ''}`)}">${esc(laneWord(ln))}</span>`
+    : sig && sig.color !== 'green' ? `<span class="sig ${sig.color}${sig.stale ? ' stale' : ''}" title="${esc(sig.reason)}">${sig.color}</span>` : '';
   const ci = CI[p.ci];
   return `
   <div class="row grid${picked ? ' picked' : ''}${isSkipped(p) ? ' aside' : ''}" role="option" data-url="${esc(p.url)}" aria-selected="${p.url === state.selected}">
@@ -303,7 +318,8 @@ function inspector(v) {
   return `<section class="insp"><div class="top cap"><span>Selected</span><span class="mono">${esc(p.repo.split('/')[1])}#${p.number}</span></div>
     <span class="subject">${esc(subject)}</span>
     <span class="who"><span class="av" style="${avatar(p.author, 40)}"></span><span>@${esc(p.author)}</span></span>
-    ${sig ? `<div class="signal ${sig.color}${sig.stale ? ' stale' : ''}" title="${sig.stale ? 'from a run on an older commit' : ''}">${color}${sig.reason ? ` · ${esc(sig.reason)}` : ''}</div>` : ''}
+    ${sig ? `<div class="signal ${sig.color}${sig.stale ? ' stale' : ''}" title="${sig.stale ? 'from a run on an older commit' : ''}">${laneOf(p) && !state.reviews[p.url]?.override ? esc(sig.reason) : `${color}${sig.reason ? ` · ${esc(sig.reason)}` : ''}`}</div>` : ''}
+    ${laneOf(p)?.decisions.length ? `<ol class="asks">${laneOf(p).decisions.map((q) => `<li>${esc(q)}</li>`).join('')}</ol>` : ''}
     <dl class="facts">${facts.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join('')}</dl>${buttons}</section>`;
 }
 
@@ -408,6 +424,9 @@ function allKeys() {
     [['o'], 'Open the PR on GitHub'],
     [['⇧R'], 'Run review on the PR'],
     ...state.actions.map((a) => [[`⇧${a.key.toUpperCase()}`], `${a.label.replace(/\?$/, '')} (runs ${a.command[0]} on the PR)`]),
+    [['l'], 'Cycle the lane filter: Agent approves, Answer questions, Read it, then all'],
+    [['⇧A'], 'Approve the selected PRs that the brief put in Agent approves, after a confirm'],
+    [['c'], 'Go to Calibration: how often each lane matched what you did'],
     [['e'], 'Mark the PR done (or, in Done, put one you marked back)'],
     [['x'], 'Set the PR aside until it changes on GitHub'],
     [['u'], 'Undo the last set aside or done'],
@@ -533,6 +552,7 @@ function actionList(multi) {
     { label: 'Open PR page', key: '↵', run: () => openPage(), single: true },
     { label: 'Run review', key: '⇧R', run: () => review() },
     ...state.actions.map((a) => ({ label: a.label.replace(/\?$/, ''), key: `⇧${a.key.toUpperCase()}`, run: () => runAction(a) })),
+    ...(state.showDone ? [] : [{ label: 'Approve agent-approved', key: '⇧A', run: () => approveLane() }]),
     { label: state.showDone ? 'Put back' : 'Mark done', key: 'e', run: () => markDone() },
     ...(state.showDone ? [] : [{ label: 'Set aside', key: 'x', run: () => skip() }]),
     { label: 'Open on GitHub', key: 'o', run: () => open(), single: true },
@@ -578,6 +598,28 @@ function open(p = current()) {
   if (!p) return;
   post('/api/open', { url: p.url });
   say(`Opened #${p.number} on GitHub`);
+}
+
+// Approves the targets the brief put in the Agent approves lane on their current head, after a confirm.
+// The server checks the lane and head again and leaves alone any PR that no longer qualifies.
+async function approveLane() {
+  const prs = actionTargets().filter((p) => laneOf(p)?.lane === 'approve' && !laneOf(p).stale && p.author !== state.viewer);
+  if (!prs.length) return say('Nothing selected is in the Agent approves lane on its current commit. l shows that lane.');
+  if (!confirm(`Approve ${label(prs)} on GitHub?\n\n${prs.map((p) => `#${p.number} ${laneOf(p).intent || p.title}`).join('\n')}`)) return;
+  say(`Approving ${label(prs)}…`);
+  const res = await post('/api/approve', { urls: prs.map((p) => p.url) }).catch((e) => ({ error: e.message }));
+  if (res.error) return say(`GitHub didn't take it: ${res.error}`);
+  const ok = prs.filter((p) => res.done.includes(p.url));
+  if (ok.length) moveOffOf(ok);
+  say(`Approved ${ok.length ? label(ok) : 'nothing'}${res.skipped.length ? ` · left ${res.skipped.length}: ${res.skipped.map((x) => x.why).join('; ')}` : ''}`);
+  load();
+}
+
+const LANE_CYCLE = [null, 'approve', 'answer', 'read'];
+function cycleLane() {
+  state.lane = LANE_CYCLE[(LANE_CYCLE.indexOf(state.lane) + 1) % LANE_CYCLE.length];
+  state.picked = [];
+  say(state.lane ? `Showing ${LANE[state.lane]} only · l for the next lane` : 'Showing every lane');
 }
 
 async function skip() {
@@ -748,6 +790,9 @@ document.addEventListener('keydown', (e) => {
     R: () => review(),
     x: () => skip(),
     e: () => markDone(),
+    A: () => approveLane(),
+    l: () => cycleLane(),
+    c: () => (location.href = '/calibration'),
     v: () => ((state.showDone = !state.showDone), (state.selected = null), (state.picked = []), render()),
     u: () => undo(),
     r: () => load(),

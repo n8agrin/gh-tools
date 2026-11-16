@@ -326,6 +326,41 @@ export interface PRDetail {
   /** Copilot has submitted a review. It counts the same as the bug-pass label. */
   copilotReviewed: boolean;
   state: 'OPEN' | 'MERGED' | 'CLOSED';
+  /** Issues this PR closes ("Fixes #123"), which are usually the spec it answers. */
+  linkedIssues: LinkedIssue[];
+}
+
+export interface LinkedIssue {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  body: string;
+}
+
+const LINKED = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      closingIssuesReferences(first: 5) { nodes { number title url body repository { nameWithOwner } } }
+    }
+  }
+}`;
+
+/** Exported for tests: the issues from the GraphQL answer, bodies cut so a long one can't crowd out the diff. */
+export function toLinkedIssues(res: any): LinkedIssue[] {
+  const nodes = res?.data?.repository?.pullRequest?.closingIssuesReferences?.nodes ?? [];
+  return nodes.map((n: any) => ({ repo: n.repository?.nameWithOwner ?? '', number: n.number, title: n.title ?? '', url: n.url ?? '', body: String(n.body ?? '').slice(0, 8000) }));
+}
+
+/** The PR's closing issues. A failure here leaves the brief without them rather than failing the page. */
+async function fetchLinkedIssues(repo: string, number: number): Promise<LinkedIssue[]> {
+  const [owner, name] = repo.split('/');
+  try {
+    return toLinkedIssues(JSON.parse(await gh(['api', 'graphql', '-f', `query=${LINKED}`, '-F', `owner=${owner}`, '-F', `name=${name}`, '-F', `number=${number}`])));
+  } catch {
+    return [];
+  }
 }
 
 /** A submitted review by Copilot, whatever the exact bot login is. Pending requests don't count. */
@@ -440,7 +475,7 @@ export async function fetchPR(url: string): Promise<PRDetail> {
   const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
   if (!m) throw new Error(`not a PR URL: ${url}`);
   const fields = 'title,body,author,isDraft,labels,baseRefName,baseRefOid,headRefOid,additions,deletions,files,reviews,state';
-  const n = JSON.parse(await gh(['pr', 'view', url, '--json', fields]));
+  const [n, linkedIssues] = await Promise.all([gh(['pr', 'view', url, '--json', fields]).then((o) => JSON.parse(o)), fetchLinkedIssues(m[1], Number(m[2]))]);
   return {
     url,
     repo: m[1],
@@ -458,5 +493,6 @@ export async function fetchPR(url: string): Promise<PRDetail> {
     files: (n.files ?? []).map((f: any) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),
     copilotReviewed: hasCopilotReview(n.reviews ?? []),
     state: n.state,
+    linkedIssues,
   };
 }
