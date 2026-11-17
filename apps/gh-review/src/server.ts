@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
 import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
@@ -84,8 +84,9 @@ const server = Bun.serve({
       }
       if (pathname === '/api/calibration') {
         const rows = calibration().map((r) => ({ ...r, agrees: agrees(r.lane, r.outcome) }));
-        return json({ rows, gate: GATE });
+        return json({ rows, gate: GATE, findings: findingStats() });
       }
+      if (pathname === '/api/ratings') return json(findingRatings(new URL(req.url).searchParams.get('url') ?? ''));
       if (pathname === '/api/runs') return json(listRuns());
       if (pathname === '/api/live') return json(liveReviews());
       if (pathname === '/api/pr') {
@@ -177,6 +178,14 @@ const server = Bun.serve({
         if (pathname === '/api/override') {
           if (body.color && !['green', 'yellow', 'red'].includes(body.color)) return json({ error: 'not a color' }, 400);
           setOverride(body.url, body.color ?? null);
+          return json({ ok: true });
+        }
+        if (pathname === '/api/rate') {
+          // Local only: your useful-or-noise call on a note, for the hit rates on /calibration.
+          if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/.test(body.url)) return json({ error: 'not a PR URL' }, 400);
+          const rating = body.rating === 'useful' || body.rating === 'noise' ? body.rating : null;
+          if (!body.key || !['check', 'taste'].includes(body.source)) return json({ error: 'missing the note' }, 400);
+          rateFinding(body.url, String(body.key), body.source, String(body.category || 'other'), rating);
           return json({ ok: true });
         }
         if (pathname === '/api/review/stop') return json({ stopped: stopReview(String(body.url ?? ''), body.key || undefined) });

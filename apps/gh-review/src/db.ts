@@ -44,6 +44,10 @@ function open(): Database {
     CREATE TABLE IF NOT EXISTS outcomes (
       pr_url TEXT NOT NULL, head_sha TEXT NOT NULL, event TEXT NOT NULL, comments INTEGER NOT NULL, at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS finding_ratings (
+      pr_url TEXT NOT NULL, note_key TEXT NOT NULL, source TEXT NOT NULL, category TEXT NOT NULL,
+      rating TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (pr_url, note_key)
+    );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT, pr_url TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       status TEXT NOT NULL, at TEXT NOT NULL
@@ -496,3 +500,26 @@ export function calibration(): Calibrated[] {
 
 /** Whether a lane's call matched what you did: approve wants a clean approval, answer anything but changes, read more than a clean approval, block changes. */
 export const agrees = (lane: Lane, outcome: Outcome) => (lane === 'approve' ? outcome === 'clean' : lane === 'answer' ? outcome !== 'changes' : lane === 'block' ? outcome === 'changes' : outcome !== 'clean');
+
+export type Rating = 'useful' | 'noise';
+
+/** Your call on one Check or Taste note: useful or noise. Adding a note to your review counts as useful. A null rating clears it. */
+export function rateFinding(prUrl: string, noteKey: string, source: string, category: string, rating: Rating | null, at = new Date().toISOString()) {
+  if (!rating) return void open().run('DELETE FROM finding_ratings WHERE pr_url = ? AND note_key = ?', [prUrl, noteKey]);
+  open().run('INSERT OR REPLACE INTO finding_ratings (pr_url, note_key, source, category, rating, at) VALUES (?, ?, ?, ?, ?, ?)', [prUrl, noteKey, source, category, rating, at]);
+}
+
+/** Your ratings on one PR's notes, by note key. */
+export function findingRatings(prUrl: string): Record<string, Rating> {
+  const rows = open().query<{ note_key: string; rating: Rating }, [string]>('SELECT note_key, rating FROM finding_ratings WHERE pr_url = ?').all(prUrl);
+  return Object.fromEntries(rows.map((r) => [r.note_key, r.rating]));
+}
+
+/** How often each kind of note was worth it, so a lens that stays noisy can be cut. */
+export function findingStats(): { source: string; category: string; useful: number; noise: number }[] {
+  return open()
+    .query<{ source: string; category: string; useful: number; noise: number }, []>(
+      `SELECT source, category, SUM(rating = 'useful') AS useful, SUM(rating = 'noise') AS noise FROM finding_ratings GROUP BY source, category ORDER BY source, category`,
+    )
+    .all();
+}

@@ -23,7 +23,7 @@
     },
     {
       "key": "check",
-      "label": "Check",
+      "label": "Bug hunt",
       "prompt": "prompts/check.md",
       "schema": "prompts/check.schema.json"
     },
