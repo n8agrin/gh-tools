@@ -1,0 +1,44 @@
+/* Today: one list of what needs you, in bands, one main button per row. Colors and type come from queue.css. */
+.today main { order: 0; flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.today .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 24px; }
+.views { display: flex; gap: 4px; }
+.views a[aria-current="page"] { color: var(--strong); background: var(--sel); }
+header .needs { display: flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+header .needs span { display: flex; align-items: baseline; gap: 5px; padding: 3px 8px; font-size: 12px; color: var(--muted); }
+header .needs b { font-weight: 600; color: var(--strong); }
+header .needs:empty { display: none; }
+
+.band { display: flex; flex-direction: column; gap: 8px; }
+.band h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.band h2 .n { font-weight: 400; letter-spacing: 0; text-transform: none; }
+.band .rows { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.band .none { padding: 12px 16px; font-size: 13px; color: var(--faint); }
+
+.trow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 16px 10px 13px; border-left: 3px solid transparent; border-top: 1px solid var(--line); cursor: pointer; scroll-margin: 16px; }
+.trow:first-child { border-top: 0; }
+.trow:hover { background: var(--hover); }
+.trow[aria-selected="true"] { background: var(--sel); border-left-color: var(--edge); }
+.trow .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .02em; }
+.trow .tag.SHIP { color: var(--green); border-color: var(--green); }
+.trow .tag.BLOCKED { color: var(--red); border-color: var(--red); }
+.trow .tag.FINDINGS, .trow .tag.AGENT { color: var(--amber); border-color: var(--amber); }
+.trow .ref { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.trow .ttl { flex: 1 1 320px; min-width: 0; font-size: 14px; font-weight: 500; color: var(--strong); }
+.trow .since { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.trow .why { flex-basis: 100%; font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif; font-size: 14px; line-height: 1.45; color: var(--text); text-wrap: pretty; }
+.trow .more { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+.trow .more .cap { margin: 0; }
+.trow .more ol { margin: 0; padding-left: 20px; font-family: "Source Serif 4", Georgia, serif; font-size: 14px; line-height: 1.45; }
+.trow .acts { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 11px; font: inherit; font-size: 12.5px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn.primary { color: var(--bg); background: var(--strong); border-color: var(--strong); font-weight: 600; }
+.btn.primary kbd { color: inherit; border-color: transparent; opacity: .7; }
+.btn:disabled { opacity: .55; cursor: default; }
+.foot { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.foot a { text-decoration: underline; text-underline-offset: 2px; }
+.today .empty { padding: 40px 0; text-align: center; color: var(--muted); }
+
+@media (max-width: 760px) {
+  header .needs { display: none; }
+}

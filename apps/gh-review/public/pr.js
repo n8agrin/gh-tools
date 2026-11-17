@@ -62,8 +62,14 @@ const player = createPlayer((why) => {
 });
 addEventListener('pagehide', () => player.stop());
 
-// Your own PRs come back to My PRs instead of the review queue, or to the board when that's where you came from.
-const home = () => (state.pr?.mine ? (sessionStorage.getItem('back') === '/board' ? '/board' : '/mine') : '/');
+// Back goes to Today when that's where you came from. Otherwise your own PRs come back to My PRs instead
+// of the review queue, or to the board when that's where you came from.
+const BACK_NAMES = { '/today': 'Today', '/board': 'Board', '/mine': 'My PRs' };
+const home = () => {
+  const back = sessionStorage.getItem('back');
+  if (back === '/today') return '/today';
+  return state.pr?.mine ? (back === '/board' ? '/board' : '/mine') : '/';
+};
 
 $('#ref').textContent = `${name}#${number}`;
 $('#github').href = url;
@@ -1601,8 +1607,8 @@ async function load() {
   if (res.error) state.error = res.error;
   else (state.pr = res), (state.diffIds = await diffIds(res.files));
   if (state.pr?.mine && state.checks) state.checks = state.checks.filter((c) => !c.skipOnMine);
-  if (state.pr?.mine) {
-    const name = home() === '/board' ? 'Board' : 'My PRs';
+  if (BACK_NAMES[home()]) {
+    const name = BACK_NAMES[home()];
     ($('#back').href = home()), ($('#back').textContent = `← ${name}`), ($('#back').title = `Back to ${name} (esc)`);
   }
   render();

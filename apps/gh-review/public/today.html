@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Today</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" />
+  <link rel="stylesheet" href="/queue.css" />
+  <link rel="stylesheet" href="/today.css" />
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem('theme') ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); } catch {}
+  </script>
+</head>
+<body class="today">
+  <header>
+    <span class="count"><b id="count"></b><span>need you</span></span>
+    <span id="needs" class="needs"></span>
+    <nav class="views" aria-label="Views">
+      <a class="ghost" href="/today" aria-current="page">Today</a>
+      <a class="ghost" href="/" title="The PRs waiting on your review  q">Review queue</a>
+      <a class="ghost" href="/mine" title="Your own open PRs  m">My PRs</a>
+      <a class="ghost" href="/board" title="Your PRs by stage  b">Board</a>
+    </nav>
+    <span class="right">
+      <span id="fetched"></span>
+      <button id="theme" class="ghost" title="Theme  t"></button>
+    </span>
+  </header>
+  <main id="today" aria-label="what needs you today"></main>
+  <footer><span id="status"></span><span id="keys"></span></footer>
+  <script src="/today.js" type="module"></script>
+</body>
+</html>

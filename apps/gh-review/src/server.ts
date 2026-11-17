@@ -9,6 +9,7 @@ import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchM
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
+import { buildToday } from './today';
 
 const PORT = Number(process.env.PORT ?? 4790);
 /** A lane earns bulk approval at this agreement over at least this many PRs. Tune it to taste. */
@@ -34,6 +35,33 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 /** Your login, from the last fetch of either list or, before any fetch, from GitHub. */
 const me = async () => viewer() ?? (await fetchViewer());
 
+/** The review queue, fresh from GitHub and saved, or the last good copy with the error when GitHub fails. */
+async function freshQueue() {
+  try {
+    const q = await fetchQueue(listImported());
+    saveQueue(q);
+    saveReviewed(q.reviewed);
+    return q;
+  } catch (e) {
+    const cached = cachedQueue();
+    if (!cached) throw e;
+    return { ...cached, error: (e as Error).message };
+  }
+}
+
+/** Your own open PRs, the same way. */
+async function freshMine() {
+  try {
+    const q = await fetchMine();
+    saveMine(q);
+    return q;
+  } catch (e) {
+    const cached = cachedMine();
+    if (!cached) throw e;
+    return { ...cached, error: (e as Error).message };
+  }
+}
+
 markInterrupted();
 
 const server = Bun.serve({
@@ -48,17 +76,8 @@ const server = Bun.serve({
         const extra = () => ({ skipped: getSkipped(), actions: loadedActions, done: listDone(), reviews: reviewSummaries(), live: liveReviews(), ...page });
         const [loadedActions, page] = await Promise.all([loadActions(), pageConfig()]);
         if (new URL(req.url).searchParams.has('cached')) return json({ ...(cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }), ...extra() });
-        try {
-          const q = await fetchQueue(listImported());
-          saveQueue(q);
-          saveReviewed(q.reviewed);
-          return json({ ...q, ...extra() });
-        } catch (e) {
-          // GitHub failed (rate limit, expired login): show the last good list and say why it's stale.
-          const cached = cachedQueue();
-          if (!cached) throw e;
-          return json({ ...cached, ...extra(), error: (e as Error).message });
-        }
+        // GitHub failed (rate limit, expired login): freshQueue shows the last good list and says why it's stale.
+        return json({ ...(await freshQueue()), ...extra() });
       }
       if (pathname === '/api/mine') {
         // Your own PRs, on their own page with their own cache and set-aside list. The board reads the same answer, plus a stage per PR.
@@ -67,15 +86,29 @@ const server = Bun.serve({
           const cached = cachedMine() ?? { prs: [], viewer: '', fetchedAt: null };
           return json({ ...cached, ...(await extra(cached.prs)) });
         }
-        try {
-          const q = await fetchMine();
-          saveMine(q);
-          return json({ ...q, ...(await extra(q.prs)) });
-        } catch (e) {
-          const cached = cachedMine();
-          if (!cached) throw e;
-          return json({ ...cached, ...(await extra(cached.prs)), error: (e as Error).message });
-        }
+        const q = await freshMine();
+        return json({ ...q, ...(await extra(q.prs)) });
+      }
+      if (pathname === '/api/today') {
+        // Both lists at once. ?cached=1 draws from the local copies before GitHub answers.
+        const cached = new URL(req.url).searchParams.has('cached');
+        const [queue, mine] = cached
+          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }]
+          : await Promise.all([freshQueue(), freshMine()]);
+        const today = buildToday({
+          viewer: queue.viewer || mine.viewer,
+          queue: queue.prs,
+          done: new Set(listDone().map((d) => d.pr.url)),
+          skipped: getSkipped(),
+          summaries: reviewSummaries(),
+          mine: mine.prs,
+          stages: await stagesFor(mine.prs),
+          mineAside: getMineAside(),
+          mineDone: getMineDone(),
+        });
+        const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
+        const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
+        return json({ ...today, fetchedAt: times[0] ?? null, error });
       }
       if (pathname === '/api/findings') {
         const q = new URL(req.url).searchParams;
@@ -253,7 +286,7 @@ const server = Bun.serve({
         }
       }
       // /pr/<owner>/<repo>/<number> is the in-app PR page; the page reads the rest from the URL.
-      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
+      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/today' ? 'today.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
       const file = Bun.file(join(PUBLIC, page));
       if (!file.name!.startsWith(PUBLIC) || !(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);

@@ -54,6 +54,10 @@ My PRs (`/mine`) has a Board link (`b`). On My PRs, `e` marks the selected PR do
 
 `/board` shows your own open PRs as a kanban with one column per pipeline stage, left to right in the order a PR moves: Hunt (no bug pass on the current head yet), Fix findings (a bug pass ran and left findings), Undraft (a clean bug pass on the current head, CI green, still a draft), Waiting (on someone else), Ship (approved, CI green, nothing in the way), and last Blocked (red CI, a conflict, or changes requested), which is off the line until it's sorted. A bug pass is a finished review run on the PR's current head with a findings check in it, or the `reviewedLabel` on the PR. Nothing on the board is set by hand and cards don't drag: a stage comes from GitHub, so the button on the selected card is how a PR moves. `h`, `j`, `k` and `l` walk the cards, `Enter` opens the PR page, `o` opens GitHub, where merging and undrafting happen, and `⇧R` runs a review.
 
+## Today
+
+`/today` is one list of everything where you hold the ball. Review requests come first, oldest first, each with what its brief left for you; then your own PRs that can move (ship, undraft, fix findings, blocked), closest to landing first. Each row has one main button on `Enter`: open the brief, approve (only when the brief cleared it on the current commit, and after a confirm), or open the PR on GitHub to merge or undraft. `x` sets a row aside until the PR changes, the same set-aside as the review queue and My PRs. Your PRs waiting on others and ones with no bug pass yet are counts at the bottom, not rows.
+
 ## Lanes and calibration
 
 The queue shows each PR's lane once a review has run: `agent ok`, the number of questions waiting (`2 q`), `read` or `block`, faded when the PR has new commits since. The panel lists the questions. `l` cycles a filter through the lanes, and `⇧A` approves the selected PRs that are in Agent approves on their current commit, after a confirm that lists them. Each PR is checked again on the server, and your own PRs are never approved.
