@@ -455,7 +455,7 @@ document.addEventListener('keydown', (e) => {
     u: () => undo(),
     h: () => ((state.showAside = !state.showAside), render()),
     r: () => load(),
-    q: () => (location.href = '/'),
+    q: () => (location.href = '/queue'),
     b: () => (location.href = '/board'),
     t: () => setTheme(state.theme === 'dark' ? 'light' : 'dark'),
     Escape: () => {
