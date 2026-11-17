@@ -1,17 +1,18 @@
 // Today: one list of everything where you hold the ball, most-waited-on first, one button per row.
 // It reads only what the review queue and My PRs already fetch, and sets nothing on GitHub.
 import type { ReviewSummary } from './db';
-import type { MyPR, ReviewPR } from './github';
+import type { Mention, MyPR, ReviewPR } from './github';
 import { LANE_NAME, type Lane } from './lane';
 import type { Stage } from './stage';
 
 /** What a row's main button does. The page maps each one to a click or a key. */
-export type Next = 'brief' | 'approve' | 'merge' | 'undraft' | 'findings' | 'unblock';
+export type Next = 'brief' | 'approve' | 'merge' | 'undraft' | 'findings' | 'unblock' | 'thread';
 
 export interface TodayRow {
   url: string;
   repo: string;
-  number: number;
+  /** The PR or issue number, or null for a notification about something else, like a release. */
+  number: number | null;
   title: string;
   /** Short label shown before the title: REVIEW, SHIP, BLOCKED and so on. */
   tag: string;
@@ -29,10 +30,12 @@ export interface TodayRow {
   decisions: string[];
   /** Open findings from the last bug pass on this head. */
   findings: number;
+  /** The notification behind a mention row, which opening it or setting it aside marks read. */
+  thread?: string;
 }
 
 export interface Band {
-  key: 'review' | 'move';
+  key: 'review' | 'move' | 'mentions';
   label: string;
   rows: TodayRow[];
 }
@@ -55,6 +58,8 @@ export interface TodayInput {
   stages: Record<string, Stage>;
   mineAside: Record<string, string>;
   mineDone: Record<string, { headSha: string }>;
+  /** Unread notifications that want you. */
+  mentions?: Mention[];
 }
 
 /** Your own PRs that need you, in the order to take them: the closest to landing first. */
@@ -73,6 +78,13 @@ function briefOn(pr: ReviewPR, s: ReviewSummary | undefined): { lane: string | n
   const detail = s.decisions[0] ?? s.intent;
   return { lane: s.lane, decisions: s.decisions, why: detail ? `${name}: ${detail}` : `${name}.` };
 }
+
+const WHY: Record<string, string> = {
+  mention: 'You were @-mentioned.',
+  team_mention: 'A team of yours was @-mentioned.',
+  comment: "New comments on a thread you're in.",
+  assign: 'You were assigned.',
+};
 
 export function buildToday(i: TodayInput): Today {
   const review: TodayRow[] = i.queue
@@ -98,10 +110,21 @@ export function buildToday(i: TodayInput): Today {
     .sort((a, b) => a.order - b.order || a.row.since.localeCompare(b.row.since))
     .map((x) => x.row);
 
+  // A mention on a PR that already has a row above is the same thing to do, so it doesn't get a second row.
+  const shown = new Set([...review, ...move].map((r) => r.url));
+  const mentions: TodayRow[] = (i.mentions ?? [])
+    .filter((m) => !shown.has(m.url))
+    .map((m) => {
+      const n = m.url.match(/\/(?:pull|issues)\/(\d+)$/);
+      return { url: m.url, repo: m.repo, number: n ? Number(n[1]) : null, title: m.title, tag: m.reason === 'assign' ? 'ASSIGNED' : 'MENTION', since: m.updatedAt, why: WHY[m.reason] ?? '', next: 'thread' as Next, mine: false, updatedAt: m.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, thread: m.id };
+    })
+    .sort((a, b) => a.since.localeCompare(b.since));
+
   return {
     bands: [
       { key: 'review', label: 'Someone is waiting on you', rows: review },
       { key: 'move', label: 'Your PRs, ready to move', rows: move },
+      { key: 'mentions', label: 'Mentions and replies', rows: mentions },
     ],
     counts: {
       waiting: open.filter((p) => stage(p)?.key === 'waiting').length,

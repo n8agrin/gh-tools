@@ -3,9 +3,9 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachedMentions, saveMentions, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, markThreadRead, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
@@ -46,6 +46,17 @@ async function freshQueue() {
     const cached = cachedQueue();
     if (!cached) throw e;
     return { ...cached, error: (e as Error).message };
+  }
+}
+
+/** Notifications that want you. A failure keeps the last good list, with the error. */
+async function freshMentions() {
+  try {
+    const list = await fetchMentions();
+    saveMentions(list);
+    return { list, error: null };
+  } catch (e) {
+    return { list: cachedMentions(), error: `Notifications: ${(e as Error).message}` };
   }
 }
 
@@ -92,9 +103,9 @@ const server = Bun.serve({
       if (pathname === '/api/today') {
         // Both lists at once. ?cached=1 draws from the local copies before GitHub answers.
         const cached = new URL(req.url).searchParams.has('cached');
-        const [queue, mine] = cached
-          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }]
-          : await Promise.all([freshQueue(), freshMine()]);
+        const [queue, mine, mentions] = cached
+          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }, { list: cachedMentions(), error: null }]
+          : await Promise.all([freshQueue(), freshMine(), freshMentions()]);
         const today = buildToday({
           viewer: queue.viewer || mine.viewer,
           queue: queue.prs,
@@ -105,10 +116,12 @@ const server = Bun.serve({
           stages: await stagesFor(mine.prs),
           mineAside: getMineAside(),
           mineDone: getMineDone(),
+          mentions: mentions.list,
         });
         const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
         const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
-        return json({ ...today, fetchedAt: times[0] ?? null, error });
+        // Notifications failing (say, a gh login without the notifications scope) shouldn't make the PRs look stale.
+        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error });
       }
       if (pathname === '/api/findings') {
         const q = new URL(req.url).searchParams;
@@ -163,6 +176,15 @@ const server = Bun.serve({
           addImported(url, at);
           cachePR(pr);
           return json({ pr });
+        }
+        if (pathname === '/api/mentions/read') {
+          // Marks a notification read on GitHub, only after you open it or set it aside on Today.
+          const m = cachedMentions().find((x) => x.id === String(body.id ?? ''));
+          if (!m) return json({ error: 'unknown notification' }, 400);
+          if (body.open) await openInBrowser(m.url);
+          await markThreadRead(m.id);
+          saveMentions(cachedMentions().filter((x) => x.id !== m.id));
+          return json({ ok: true });
         }
         if (pathname === '/api/mine/aside') {
           setMineAside(body.url, body.updatedAt ?? null);
