@@ -363,9 +363,9 @@ async function fetchLinkedIssues(repo: string, number: number): Promise<LinkedIs
   }
 }
 
-/** A submitted review by Copilot, whatever the exact bot login is. Pending requests don't count. */
-export const hasCopilotReview = (reviews: { author?: { login?: string } | null; state?: string }[]) =>
-  reviews.some((r) => /copilot/i.test(r.author?.login ?? '') && r.state !== 'PENDING');
+/** A submitted review by Copilot, whatever the exact bot login is. Pending requests don't count, and nor does Copilot saying it couldn't review (out of quota, too large). */
+export const hasCopilotReview = (reviews: { author?: { login?: string } | null; state?: string; body?: string }[]) =>
+  reviews.some((r) => /copilot/i.test(r.author?.login ?? '') && r.state !== 'PENDING' && !/\b(was )?unable to review\b/i.test(r.body ?? ''));
 
 export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
 export interface LineComment {
