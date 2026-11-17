@@ -99,3 +99,18 @@ test('calibration pairs each brief lane with what you did, and agrees by lane', 
   expect(rows.map((r) => agrees(r.lane, r.outcome))).toEqual([true, false, true]);
   expect(reviewSummaries()[pr(902).url]).toMatchObject({ lane: 'answer', color: 'yellow', decisions: ['OK?'] });
 });
+
+test('finding ratings: one per note, re-rating replaces, clearing removes, stats by kind', async () => {
+  const { rateFinding, findingRatings, findingStats } = await import('../src/db');
+  const u = 'https://github.com/o/r/pull/950';
+  rateFinding(u, 'finding:null deref', 'check', 'bug', 'noise');
+  rateFinding(u, 'finding:null deref', 'check', 'bug', 'useful');
+  rateFinding(u, 'taste:reuse fmtDate?', 'taste', 'duplicate', 'useful');
+  rateFinding(u, 'taste:inline this', 'taste', 'simpler', 'noise');
+  rateFinding(u, 'taste:inline this', 'taste', 'simpler', null);
+  expect(findingRatings(u)).toEqual({ 'finding:null deref': 'useful', 'taste:reuse fmtDate?': 'useful' });
+  expect(findingStats()).toEqual([
+    { source: 'check', category: 'bug', useful: 1, noise: 0 },
+    { source: 'taste', category: 'duplicate', useful: 1, noise: 0 },
+  ]);
+});
