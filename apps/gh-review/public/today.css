@@ -12,7 +12,7 @@ header .needs:empty { display: none; }
 .band h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .band h2 .n { font-weight: 400; letter-spacing: 0; text-transform: none; }
 .band h2 .warn { color: var(--amber); }
-.trow .tag.ASSIGNED { color: var(--edge); border-color: var(--edge); }
+.trow .tag.ASSIGNED, .trow .tag.ISSUE { color: var(--edge); border-color: var(--edge); }
 .band .rows { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .band .none { padding: 12px 16px; font-size: 13px; color: var(--faint); }
 

@@ -88,3 +88,18 @@ test('mentions come oldest first, and a mention on a PR already above gets no se
   expect(rows[0]).toMatchObject({ number: null, tag: 'MENTION', next: 'thread', why: 'A team of yours was @-mentioned.' });
   expect(rows[1]).toMatchObject({ number: 63140, why: "New comments on a thread you're in." });
 });
+
+test("an agent's question comes before mentions, and issues to start come last", async () => {
+  const agents = { ...(await Bun.file(`${import.meta.dir}/agent-issues.json`).json()), cap: 5 };
+  // A mention on the blocked issue is the same thing to do as answering it.
+  const mentions = [{ id: '1', url: 'https://github.com/acme/app/issues/3', repo: 'acme/app', number: 3, title: 'Speed up the board', reason: 'mention', updatedAt: '2026-11-15T10:00:00Z' }];
+  const t = buildToday(input({ agents, mentions: mentions as any }));
+  expect(t.bands.map((b) => b.key)).toEqual(['review', 'move', 'agents', 'mentions', 'start']);
+  const [asking] = t.bands[2].rows;
+  expect(asking).toMatchObject({ tag: 'AGENT', next: 'answer', number: 3, why: '@agent-bot: Should the cache live in sqlite or memory?', since: '2026-11-15T09:00:00Z' });
+  expect(t.bands[3].rows).toEqual([]);
+  expect(t.bands[4].rows.map((r) => [r.number, r.tag, r.next])).toEqual([[7, 'ISSUE', 'start'], [9, 'ISSUE', 'start']]);
+  expect(t.agents).toEqual({ inFlight: 2, cap: 5 });
+  // Without an agent in your config there are no agent bands.
+  expect(buildToday(input()).bands.map((b) => b.key)).toEqual(['review', 'move', 'mentions']);
+});

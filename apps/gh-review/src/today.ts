@@ -1,12 +1,12 @@
 // Today: one list of everything where you hold the ball, most-waited-on first, one button per row.
 // It reads only what the review queue and My PRs already fetch, and sets nothing on GitHub.
 import type { ReviewSummary } from './db';
-import type { Mention, MyPR, ReviewPR } from './github';
+import type { AgentIssue, Mention, MyPR, ReviewPR } from './github';
 import { LANE_NAME, type Lane } from './lane';
 import type { Stage } from './stage';
 
 /** What a row's main button does. The page maps each one to a click or a key. */
-export type Next = 'brief' | 'approve' | 'merge' | 'undraft' | 'findings' | 'unblock' | 'thread';
+export type Next = 'brief' | 'approve' | 'merge' | 'undraft' | 'findings' | 'unblock' | 'thread' | 'answer' | 'start';
 
 export interface TodayRow {
   url: string;
@@ -37,7 +37,7 @@ export interface TodayRow {
 }
 
 export interface Band {
-  key: 'review' | 'move' | 'mentions';
+  key: 'review' | 'move' | 'agents' | 'mentions' | 'start';
   label: string;
   rows: TodayRow[];
 }
@@ -46,6 +46,8 @@ export interface Today {
   bands: Band[];
   /** Not rows, just counts: your PRs waiting on others, ones with no bug pass yet, and rows you set aside or marked done. */
   counts: { waiting: number; hunt: number; hidden: number };
+  /** Issues queued for or held by an agent, against the cap, when your config hands issues to one. */
+  agents: { inFlight: number; cap: number } | null;
 }
 
 export interface TodayInput {
@@ -62,6 +64,8 @@ export interface TodayInput {
   mineDone: Record<string, { headSha: string }>;
   /** Unread notifications that want you. */
   mentions?: Mention[];
+  /** Your issues in the agent repos, when your config has an agent. */
+  agents?: { ready: AgentIssue[]; asking: AgentIssue[]; inFlight: number; cap: number };
 }
 
 /** Your own PRs that need you, in the order to take them: the closest to landing first. */
@@ -80,6 +84,12 @@ function briefOn(pr: ReviewPR, s: ReviewSummary | undefined): { lane: string | n
   const detail = s.decisions[0] ?? s.intent;
   return { lane: s.lane, decisions: s.decisions, why: detail ? `${name}: ${detail}` : `${name}.` };
 }
+
+/** The first non-empty line of a comment, cut to a sentence's length. */
+const firstLine = (body: string) => {
+  const line = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  return line.length > 200 ? `${line.slice(0, 199)}…` : line;
+};
 
 const WHY: Record<string, string> = {
   mention: 'You were @-mentioned.',
@@ -112,8 +122,15 @@ export function buildToday(i: TodayInput): Today {
     .sort((a, b) => a.order - b.order || a.row.since.localeCompare(b.row.since))
     .map((x) => x.row);
 
-  // A mention on a PR that already has a row above is the same thing to do, so it doesn't get a second row.
-  const shown = new Set([...review, ...move].map((r) => r.url));
+  const issueRow = (x: AgentIssue, o: Pick<TodayRow, 'tag' | 'why' | 'next' | 'since'>): TodayRow => ({ url: x.url, repo: x.repo, number: x.number, title: x.title, mine: false, updatedAt: x.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, labels: x.labels, ...o });
+  // The agent's question is its last comment; its first line is enough to know what it's asking.
+  const asking = (i.agents?.asking ?? []).map((x) =>
+    issueRow(x, { tag: 'AGENT', next: 'answer', since: x.lastComment?.at ?? x.updatedAt, why: x.lastComment ? `@${x.lastComment.author}: ${firstLine(x.lastComment.body)}` : 'The agent is waiting on you. Its question is on the issue.' }),
+  );
+  const start = (i.agents?.ready ?? []).map((x) => issueRow(x, { tag: 'ISSUE', next: 'start', since: x.updatedAt, why: 'Assigned to you, no agent on it yet.' }));
+
+  // A mention on something that already has a row above is the same thing to do, so it doesn't get a second row.
+  const shown = new Set([...review, ...move, ...asking, ...start].map((r) => r.url));
   const mentions: TodayRow[] = (i.mentions ?? [])
     .filter((m) => !shown.has(m.url))
     .map((m) => {
@@ -126,8 +143,11 @@ export function buildToday(i: TodayInput): Today {
     bands: [
       { key: 'review', label: 'Someone is waiting on you', rows: review },
       { key: 'move', label: 'Your PRs, ready to move', rows: move },
+      ...(i.agents ? [{ key: 'agents' as const, label: 'Agents asking you', rows: asking }] : []),
       { key: 'mentions', label: 'Mentions and replies', rows: mentions },
+      ...(i.agents ? [{ key: 'start' as const, label: 'Ready to start', rows: start }] : []),
     ],
+    agents: i.agents ? { inFlight: i.agents.inFlight, cap: i.agents.cap } : null,
     counts: {
       waiting: open.filter((p) => stage(p)?.key === 'waiting').length,
       hunt: open.filter((p) => stage(p)?.key === 'hunt').length,
