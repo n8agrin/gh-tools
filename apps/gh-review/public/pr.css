@@ -5,6 +5,7 @@
   --text: #3a3731; --fg: #22201c; --muted: #6e695f; --faint: #9a958a;
   --add: #4f7a45; --del: #a5583f; --add-bg: #e3e9da; --del-bg: #f0e0d8;
   --red: #c4412b; --amber: #a2701c; --green: #55744a; --accent: #22201c;
+  --k-check: #4f74a8; --k-untested: #7a5aa8; --k-taste: #3f8577;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -13,6 +14,7 @@
     --text: #d6d1c4; --fg: #e9e4d7; --muted: #958f82; --faint: #69655c;
     --add: #9db48f; --del: #c79483; --add-bg: #222820; --del-bg: #2b211d;
     --red: #e0654c; --amber: #d29d47; --green: #8fa97f; --accent: #e9e4d7;
+  --k-check: #9cc3ef; --k-untested: #c4a8ef; --k-taste: #8fd1c3;
     color-scheme: dark;
   }
 }
@@ -21,6 +23,7 @@
   --text: #d6d1c4; --fg: #e9e4d7; --muted: #958f82; --faint: #69655c;
   --add: #9db48f; --del: #c79483; --add-bg: #222820; --del-bg: #2b211d;
   --red: #e0654c; --amber: #d29d47; --green: #8fa97f; --accent: #e9e4d7;
+  --k-check: #9cc3ef; --k-untested: #c4a8ef; --k-taste: #8fd1c3;
   color-scheme: dark;
 }
 .pr-page { height: 100vh; color: var(--text); font-family: "IBM Plex Sans", -apple-system, sans-serif; font-variant-numeric: tabular-nums; }
@@ -665,12 +668,29 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .rstep .rwhy { grid-column: 2 / 5; font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 .rstep.failed .rwhy { color: var(--red); }
 /* Feedback for the author: one list of every AI note, each one click from your review */
-.fbs { display: flex; flex-direction: column; margin-top: 8px; }
-.fb { display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 4px 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
-.fb .fk { font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 3px; white-space: nowrap; }
+.fbs { display: flex; flex-direction: column; margin-top: 4px; }
+.fbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 8px 0; margin-top: 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.fchip { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer; }
+.fchip:hover { background: var(--hover); }
+.fchip.on { border-color: var(--line); background: var(--sel); color: var(--fg); }
+.fhide { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.fgroup { display: flex; flex-direction: column; }
+.fgh { display: flex; align-items: baseline; gap: 10px; padding: 14px 0 4px; font-size: 12px; }
+.fgh h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.fb { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 4px 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+.fb.added { opacity: 0.62; }
+.fb .fk { justify-self: start; font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; background: var(--panel); }
 .fb .fx p { margin: 0; overflow-wrap: anywhere; }
-.fb .fx .why { color: var(--muted); }
-.fb .fl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: 12px; }
+.fb .fx p.why { color: var(--muted); margin-top: 4px; }
+.fb .fl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: 12px; }
 .fb .fl .rates { margin-left: 0; }
+.fsame { padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.fb .fa { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .fb .fa .btn { white-space: nowrap; }
-@media (max-width: 700px) { .fb { grid-template-columns: minmax(0, 1fr); } }
+.fplace { font-size: 11.5px; color: var(--muted); text-align: right; max-width: 170px; }
+.k-finding, .k-fix { color: var(--amber); } .k-finding.red { color: var(--red); }
+.k-check { color: var(--k-check); } .k-test-gap { color: var(--k-untested); } .k-taste { color: var(--k-taste); }
+.fbfoot { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 12px; padding: 10px 0; background: var(--bg); border-top: 1px solid var(--line); font-size: 13px; }
+.fbacts { display: flex; gap: 8px; }
+@media (max-width: 700px) { .fb { grid-template-columns: minmax(0, 1fr); } .fb .fa { align-items: flex-start; } }
