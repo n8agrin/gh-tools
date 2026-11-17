@@ -46,6 +46,7 @@ Your settings live in `~/.gh-review/config.json`, outside the repo. Without one 
 - `danger`: areas where a change needs a careful read. Check and the brief are told about them.
 - `reviewedLabel`: a label that means someone already ran a bug pass. Leave it out if your team doesn't use one.
 - `defaultRepo`: which repo a bare PR number means when you import one. Defaults to the first repo under `checkouts`.
+- `sessions`: test boxes per repo, for teams where a PR label boots a preview environment and a bot comments when it's up. `{"owner/repo": {"name": "Depot", "label": "preview", "up": "text in the bot's up comment", "ended": "text in its ended comment", "open": ["bin/connect", "--pr", "{number}", "--sandbox", "{sandbox}"]}}`. Today then offers Test on Depot on that repo's PRs: it adds the label, shows the box booting until the up comment lands, and Open runs `open` in your checkout (left running, logged under `~/.gh-review/tunnels`) and opens the first `https://host:port` address in the comment. Stop box removes the label. The sandbox id comes from `--sandbox <id>` in the comment and the end time from `ends at HH:MM UTC`; `ttl` (minutes) is the fallback.
 - `browser`: the app to open GitHub links in, like `"Google Chrome"`. Defaults to your default browser.
 
 ## Board

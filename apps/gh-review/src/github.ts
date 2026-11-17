@@ -538,3 +538,36 @@ export async function markThreadRead(id: string): Promise<void> {
   if (!/^\d+$/.test(id)) throw new Error(`not a notification id: ${id}`);
   await gh(['api', '-X', 'PATCH', `notifications/threads/${id}`]);
 }
+
+const ISSUE_OF = (url: string) => {
+  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
+  if (!m) throw new Error(`not a PR URL: ${url}`);
+  return { repo: m[1], number: m[2] };
+};
+
+/** A PR's labels right now, and the newest comment whose body contains any of `needles`. Read only. */
+export async function fetchLabelsAndComment(url: string, needles: string[]): Promise<{ labels: string[]; comment: { body: string; at: string } | null }> {
+  const { repo, number } = ISSUE_OF(url);
+  const [labels, comments] = await Promise.all([
+    gh(['api', `repos/${repo}/issues/${number}/labels`, '--jq', '.[].name']).then((o) => o.split('\n').filter(Boolean)),
+    gh(['api', '--paginate', `repos/${repo}/issues/${number}/comments?per_page=100`, '--jq', '.[] | {body, at: .updated_at} | tojson']).then((o) => o.split('\n').filter(Boolean).map((l) => JSON.parse(l) as { body: string; at: string })),
+  ]);
+  const hit = comments.filter((c) => needles.some((n) => c.body?.includes(n))).sort((a, b) => a.at.localeCompare(b.at)).at(-1) ?? null;
+  return { labels, comment: hit };
+}
+
+/** Adds or removes one label on a PR. Only a click on the PR's Depot buttons calls this. */
+export async function setLabel(url: string, label: string, on: boolean): Promise<void> {
+  const { repo, number } = ISSUE_OF(url);
+  if (!label.trim()) throw new Error('no label');
+  if (on) {
+    const proc = Bun.spawn(['gh', 'api', '-X', 'POST', `repos/${repo}/issues/${number}/labels`, '--input', '-'], { stdin: new Blob([JSON.stringify({ labels: [label] })]), stdout: 'pipe', stderr: 'pipe' });
+    const [err, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) throw new Error(err.trim() || `gh exited ${code}`);
+    return;
+  }
+  // Removing a label that's already gone is fine: the box is off either way.
+  await gh(['api', '-X', 'DELETE', `repos/${repo}/issues/${number}/labels/${encodeURIComponent(label)}`]).catch((e) => {
+    if (!/404|Label does not exist/.test(e.message)) throw e;
+  });
+}

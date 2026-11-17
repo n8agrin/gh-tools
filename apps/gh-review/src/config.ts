@@ -38,6 +38,21 @@ export interface Check {
   needsInPR?: string;
 }
 
+/** A remote test box per PR that a label starts and a bot comment reports on, like a preview deploy. */
+export interface Session {
+  /** What the buttons call it, as in Test on Depot. Defaults to "a test box". */
+  name?: string;
+  /** The label that starts the box. Removing it stops the box. */
+  label: string;
+  /** Text in the bot's comment once the box is up, and once it has ended. */
+  up: string;
+  ended: string;
+  /** How to reach a box that's up, run in your checkout, with {number} and {sandbox} filled in. Optional. */
+  open?: string[];
+  /** Minutes a box lives, for the "minutes left" hint. Optional. */
+  ttl?: number;
+}
+
 export interface Config {
   /** Where your clone of each repo lives, like {"owner/repo": "~/src/repo"}. Reviews and chats check out worktrees from it. */
   checkouts: Record<string, string>;
@@ -54,6 +69,8 @@ export interface Config {
   red?: RedPath[];
   /** Per-PR commands bound to Shift plus a key. */
   actions?: Action[];
+  /** Test boxes per repo, like {"owner/repo": {"label": "preview", ...}}. Adds Test on Depot to Today. */
+  sessions?: Record<string, Session>;
 }
 
 export const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());

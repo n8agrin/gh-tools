@@ -5,11 +5,12 @@ import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
 import { addImported, cachedMentions, saveMentions, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, markThreadRead, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
-import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, fetchLabelsAndComment, markThreadRead, setLabel, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
+import { CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
+import { openCommand, sessionState, startTunnel, stopTunnel, tunnelRunning } from './session';
 
 const PORT = Number(process.env.PORT ?? 4790);
 /** A lane earns bulk approval at this agreement over at least this many PRs. Tune it to taste. */
@@ -47,6 +48,23 @@ async function freshQueue() {
     if (!cached) throw e;
     return { ...cached, error: (e as Error).message };
   }
+}
+
+/** The test-box settings for a PR's repo, or null when your config has none. */
+async function sessionConfig(url: string) {
+  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+$/);
+  return m ? ((await loadConfig()).sessions?.[m[1]] ?? null) : null;
+}
+
+/** A PR's test box, read fresh from GitHub: the label and the bot's newest comment. */
+async function sessionInfo(url: string) {
+  const cfg = await sessionConfig(url);
+  if (!cfg) return { state: 'none', sandbox: null, appUrl: null, endsAt: null, tunnel: false };
+  const { labels, comment } = await fetchLabelsAndComment(url, [cfg.up, cfg.ended]);
+  const s = sessionState(cfg, labels.includes(cfg.label), comment);
+  // A box that went away takes its tunnel with it.
+  if (s.state !== 'ready') stopTunnel(url);
+  return { ...s, tunnel: tunnelRunning(url, s.sandbox) };
 }
 
 /** Notifications that want you. A failure keeps the last good list, with the error. */
@@ -121,7 +139,14 @@ const server = Bun.serve({
         const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
         const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
         // Notifications failing (say, a gh login without the notifications scope) shouldn't make the PRs look stale.
-        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error });
+        const { sessions = {} } = await loadConfig();
+        // Which repos get Test on Depot buttons, by the name and label your config gives them.
+        const boxes = Object.fromEntries(Object.entries(sessions).map(([repo, c]) => [repo, { name: c.name ?? null, label: c.label }]));
+        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, sessions: boxes });
+      }
+      if (pathname === '/api/session') {
+        const url = new URL(req.url).searchParams.get('url') ?? '';
+        return json(await sessionInfo(url));
       }
       if (pathname === '/api/findings') {
         const q = new URL(req.url).searchParams;
@@ -176,6 +201,29 @@ const server = Bun.serve({
           addImported(url, at);
           cachePR(pr);
           return json({ pr });
+        }
+        if (pathname === '/api/session') {
+          // Test boxes: start adds the PR's label, stop removes it, open reaches a box that's up.
+          // Each one only after a click on Today.
+          const url = String(body.url ?? '');
+          const cfg = await sessionConfig(url);
+          if (!cfg) return json({ error: 'No test box is set up for this repo. Add it under "sessions" in your config.' }, 400);
+          if (body.do === 'start') await setLabel(url, cfg.label, true);
+          else if (body.do === 'stop') stopTunnel(url), await setLabel(url, cfg.label, false);
+          else if (body.do === 'open') {
+            const info = await sessionInfo(url);
+            if (info.state !== 'ready') return json({ error: "The box isn't up yet." }, 409);
+            const checkout = (await loadConfig()).checkouts?.[url.split('/').slice(3, 5).join('/')];
+            const cmd = info.sandbox ? openCommand(cfg, Number(url.split('/').at(-1)), info.sandbox) : null;
+            if (cmd && !checkout) return json({ error: noCheckout(url.split('/').slice(3, 5).join('/')) }, 400);
+            if (cmd && !tunnelRunning(url, info.sandbox)) {
+              startTunnel(url, cmd, info.sandbox!, checkout!);
+              // Give the tunnel a moment to bind before the browser asks for the page.
+              await Bun.sleep(4000);
+            }
+            if (info.appUrl && /^https?:\/\//.test(info.appUrl)) await openInBrowser(info.appUrl);
+          } else return json({ error: 'unknown session action' }, 400);
+          return json(await sessionInfo(url));
         }
         if (pathname === '/api/mentions/read') {
           // Marks a notification read on GitHub, only after you open it or set it aside on Today.
