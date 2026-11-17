@@ -47,7 +47,7 @@ const loadComments = () => {
 
 const state = {
   pr: null, error: null, reviews: [], optional: [], extras: new Set(), shown: null, diffIds: {}, starting: false, queue: null,
-  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {}, fu: null, filed: loadFiled(),
+  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {}, fu: null, filed: loadFiled(), ratings: {},
 };
 
 // The Narration check, read aloud. With follow along on, the whole-PR narration opens each file as it reaches it.
@@ -219,7 +219,7 @@ const doneOutput = (steps, k) => (steps[k]?.status === 'done' ? parse(steps[k]) 
 const allTaste = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
 const tasteQuestions = (taste) => allTaste(taste).filter((q) => q.kind !== 'existing');
 const tasteExisting = (taste) => allTaste(taste).filter((q) => q.kind === 'existing');
-const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
+const LENS = { duplicate: 'Duplicate', simpler: 'Simpler', consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
 
 // Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
 const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
@@ -259,10 +259,10 @@ function allNotes(steps) {
   return [
     ...(doneOutput(steps, 'check')?.findings ?? []).map((f) => ({ ...f, kind: 'finding' })),
     ...(doneOutput(steps, 'guide')?.notes ?? []),
-    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example })),
+    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example, lens: q.lens })),
   ];
 }
-const NOTE_WORD = { finding: 'Check.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
+const NOTE_WORD = { finding: 'Bug hunt.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
 const isCheck = (n) => n.kind === 'check' || n.kind === 'finding';
 
 // The files to read and the routine ones, decided once so the sidebar, the numbers and the map agree.
@@ -559,7 +559,7 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
+const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], hunt: ['check'] };
 const rerunBtn = (id) => {
   const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
   if (!keys) return '';
@@ -778,6 +778,28 @@ function shapeSection(b) {
   return bsec('shape', 'Shape of the change', `<div class="shapes">${cards}</div>`, `<span class="sub">${plural(state.pr.files.length, 'file')} as ${plural(b.groups.length, 'item')}</span>`);
 }
 
+// The bug hunt's call on merging, what it found, and what it left out and why.
+const HUNT = { safe: ['Safe to merge', 'green'], careful: ['Merge with care', 'yellow'], dangerous: ['Dangerous to merge', 'red'] };
+const huntOf = (steps) => {
+  const h = doneOutput(steps, 'check');
+  return h?.verdict && HUNT[h.verdict] ? h : null;
+};
+function huntSection(steps, r) {
+  const h = huntOf(steps);
+  if (!h) return '';
+  const [word, tone] = HUNT[h.verdict];
+  const where = (f) => `<button class="link" type="button" data-go="${esc(f.file)}">${esc(shortName(f.file))}:${esc(String(f.lines).split('-')[0])}</button>`;
+  let body = `<p class="mwhy">${t(h.verdict_why)}${h.verdict_moved ? ` <span class="faint">Was dangerous; came down because ${esc(h.verdict_moved)}.</span>` : ''}</p>`;
+  const fs = [...h.findings].sort((a, b) => (RANK[b.color] ?? 0) - (RANK[a.color] ?? 0));
+  if (fs.length) body += `<ul class="hunt">${fs.map((f) => `<li><span class="c-${f.color === 'red' ? 'red' : 'yellow'}">●</span> <b>${esc(f.category[0].toUpperCase() + f.category.slice(1))}.</b> ${t(f.note)} ${where(f)}${f.downgraded ? ` <span class="faint">Was red: ${t(f.downgraded)}</span>` : ''}</li>`).join('')}</ul>`;
+  else body += `<p class="faint">No findings. Each one sits on its file too.</p>`;
+  const extra = [];
+  if (h.already_said?.length) extra.push(`<details><summary>Already raised on the PR, so left out (${h.already_said.length})</summary><ul>${h.already_said.map((x) => `<li>${t(x)}</li>`).join('')}</ul></details>`);
+  if (h.dropped?.length) extra.push(`<details><summary>Dropped by the skeptic (${h.dropped.length})</summary><ul>${h.dropped.map((x) => `<li>${t(x.note)} <span class="faint">${esc(shortName(x.file))}:${esc(String(x.lines).split('-')[0])} · ${t(x.reason)}</span></li>`).join('')}</ul></details>`);
+  if (h.verify_error) extra.push(`<p class="faint">The skeptic didn't run: ${esc(h.verify_error)}</p>`);
+  return bsec('hunt', 'Bug hunt', `<div class="huntb">${body}${extra.join('')}</div>`, `<span class="sig c-${tone}"><i></i>${esc(word)}</span>`);
+}
+
 function brief(m) {
   const pr = state.pr;
   const { r, steps } = m;
@@ -816,6 +838,7 @@ function brief(m) {
 
   html += claimsSection(bf, r);
   html += shapeSection(bf);
+  html += huntSection(steps, r);
 
   const talk = conversation();
   if (talk) html += bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`);
@@ -1147,11 +1170,33 @@ function noteBtn(path, line, x) {
   return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
 }
 
+// Useful or noise on each Check and Taste note, kept locally so /calibration can show each lens's hit rate.
+const rateSource = (x) => (x.kind === 'finding' ? 'check' : x.kind === 'taste' ? 'taste' : null);
+function rateBtns(x) {
+  if (!rateSource(x)) return '';
+  const k = noteKey(x);
+  const on = state.ratings[k];
+  const b = (r, word) => `<button class="link rate ${on === r ? 'on' : ''}" type="button" data-rate="${r}" data-key="${esc(k)}" title="${on === r ? 'Clear' : `Count this note as ${r}`} (feeds /calibration)">${word}</button>`;
+  return `<span class="rates">${b('useful', 'Useful')}${b('noise', 'Noise')}</span>`;
+}
+
+async function rate(x, rating) {
+  const k = noteKey(x);
+  if (rating) state.ratings[k] = rating;
+  else delete state.ratings[k];
+  render();
+  const res = await post('/api/rate', { url, key: k, source: rateSource(x), category: x.kind === 'finding' ? x.category : x.lens, rating });
+  if (res?.error) status(`Couldn't save the rating: ${res.error}`);
+}
+
 function draftFromNote(btn) {
   const path = btn.dataset.notePath;
   const line = Number(btn.dataset.noteLine);
   const code = state.diff?.[path]?.hunks.flatMap((h) => h.lines).find((l) => l[0] !== '-' && l[2] === line)?.[3] ?? '';
   openDraft(path, 'RIGHT', line, code, btn.dataset.noteText, null, btn.dataset.noteKey);
+  // Taking a note into your review is the strongest sign it was worth it.
+  const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === btn.dataset.noteKey);
+  if (x && !state.ratings[noteKey(x)]) rate(x, 'useful');
 }
 
 function saveDraft() {
@@ -1361,7 +1406,7 @@ function diffHtml(path, notes) {
     const here = n && at.get(n);
     if (!here) return '';
     at.delete(n);
-    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}</div>`).join('');
+    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}${rateBtns(x)}</div>`).join('');
   };
   const lang = langOf(path);
   let shown = 0;
@@ -1401,7 +1446,7 @@ function fileView(m, path) {
     const line = n.lines ? `<span class="at">line ${esc(String(n.lines))}</span>` : '';
     const scenario = n.scenario ? ` <span class="why">${t(n.scenario)}</span>` : '';
     const art = n.art ? ` <a class="ref-l" href="${safe(n.art.url)}" target="_blank" rel="noreferrer">prior art</a>` : '';
-    return `<p><b>${NOTE_WORD[n.kind] ?? ''}</b> ${t(n.note)}${scenario} ${line}${art}</p>`;
+    return `<p><b>${NOTE_WORD[n.kind] ?? ''}</b> ${t(n.note)}${scenario} ${line}${art}${rateBtns(n)}</p>`;
   });
   // Threads whose lines moved away can't sit in the diff, so they're listed here.
   const stale = (state.gh?.lines ?? []).filter((c) => !c.replyTo && c.path === path && c.line === null);
@@ -1563,6 +1608,7 @@ async function load() {
   render();
   // Everyone's comments only add to the page, so a failure just leaves them out.
   fetch(`/api/comments?url=${encodeURIComponent(url)}`).then((r) => (r.ok ? r.json() : null)).then((g) => g?.lines && ((state.gh = g), render())).catch(() => {});
+  fetch(`/api/ratings?url=${encodeURIComponent(url)}`).then((r) => (r.ok ? r.json() : null)).then((x) => x && !x.error && ((state.ratings = x), render())).catch(() => {});
   // The diff is usually wanted a few seconds later, so fetch it now.
   if (state.pr) loadDiff();
 }
@@ -1873,7 +1919,7 @@ $('#page').addEventListener('click', (e) => {
   if (id === 'run') return runReview();
   const decide = e.target.closest('[data-decide]');
   if (decide) return decideFromBrief(decide.dataset.decide, Number(decide.dataset.i));
-  const shape = e.target.closest('.shape[data-go]');
+  const shape = e.target.closest('.shape[data-go], .huntb [data-go]');
   if (shape) return open(shape.dataset.go);
   if (id === 'narr-write') return writeNarration();
   const play = e.target.closest('.narr-play');
@@ -1913,6 +1959,11 @@ $('#page').addEventListener('click', (e) => {
     return render();
   }
   if (id === 'sub-back') return open(state.back === 'submit' ? 'brief' : state.back);
+  const rb = e.target.closest('[data-rate]');
+  if (rb) {
+    const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === rb.dataset.key);
+    return x && rate(x, state.ratings[rb.dataset.key] === rb.dataset.rate ? null : rb.dataset.rate);
+  }
   const nadd = e.target.closest('[data-note-text]');
   if (nadd) return draftFromNote(nadd);
   const nj = e.target.closest('.nadd[data-jump]');

@@ -650,3 +650,13 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .shape:hover { background: var(--hover); }
 .shape.core { border: 2px solid var(--accent); }
 .shape.core .kicker { color: var(--accent); }
+
+/* Bug hunt and the useful/noise ratings on notes */
+.huntb ul { margin: 6px 0; padding-left: 18px; }
+.huntb ul.hunt { list-style: none; padding-left: 0; }
+.huntb li { margin: 4px 0; overflow-wrap: anywhere; }
+.huntb details { margin-top: 8px; font-size: 14px; }
+.huntb summary { cursor: pointer; color: var(--muted); }
+.rates { display: inline-flex; gap: 8px; margin-left: 10px; font-size: 12px; }
+.rates .rate { opacity: 0.6; }
+.rates .rate.on { opacity: 1; font-weight: 600; text-decoration: underline; }
