@@ -6,6 +6,7 @@ const state = {
   counts: { waiting: 0, hunt: 0, hidden: 0 },
   fetchedAt: null,
   error: null,
+  mentionsError: null,
   loading: true,
   selected: sessionStorage.getItem('todaySelected'),
   status: '',
@@ -26,12 +27,13 @@ function age(iso) {
   return `${Math.floor(m / 10080)}w`;
 }
 
+const ref = (r) => `${r.repo.split('/')[1]}${r.number ? `#${r.number}` : ''}`;
 const rows = () => state.bands.flatMap((b) => b.rows);
 const current = () => rows().find((r) => r.key === state.selected);
 const say = (msg) => ((state.status = msg), render());
 
 /** How long it's been: a review request has been waiting on you, your own PR since it last changed. */
-const sinceText = (r) => (r.mine ? `updated ${age(r.since)} ago` : `waiting on you ${age(r.since)}`);
+const sinceText = (r) => (r.mine ? `updated ${age(r.since)} ago` : r.thread ? `${age(r.since)} ago` : `waiting on you ${age(r.since)}`);
 
 /** Each row's one main button: its label, its key, and what it does. */
 const PRIMARY = {
@@ -41,10 +43,12 @@ const PRIMARY = {
   undraft: ['Mark ready on GitHub', '↵', (r) => openGitHub(r)],
   findings: ['See the findings', '↵', (r) => openPage(r)],
   unblock: ['Open on GitHub', '↵', (r) => openGitHub(r)],
+  thread: ['Open thread', '↵', (r) => openThread(r)],
 };
 
 /** The other buttons on the selected row. Later features add theirs here. */
 function extras(r) {
+  if (r.thread) return '<button class="btn" type="button" data-do="aside">Mark read <kbd>x</kbd></button>';
   const out = [];
   if (!['brief', 'findings'].includes(r.next)) out.push('<button class="btn" type="button" data-do="page">PR page <kbd>p</kbd></button>');
   if (!['merge', 'undraft', 'unblock'].includes(r.next)) out.push('<button class="btn" type="button" data-do="github">GitHub <kbd>o</kbd></button>');
@@ -60,7 +64,7 @@ function row(r) {
     : '';
   return `<div class="trow" role="option" data-key="${esc(r.key)}" aria-selected="${selected}">
     <span class="tag ${esc(r.tag)}">${esc(r.tag)}</span>
-    <span class="ref mono">${esc(r.repo.split('/')[1])}#${r.number}</span>
+    <span class="ref mono">${esc(ref(r))}</span>
     <span class="ttl">${esc(r.title)}</span>
     <span class="since mono" title="${esc(new Date(r.since).toLocaleString())}">${esc(sinceText(r))}</span>
     <button class="btn primary" type="button" data-do="primary">${esc(primary[0])} <kbd>${esc(primary[1])}</kbd></button>
@@ -81,7 +85,7 @@ function renderList() {
     return;
   }
   const bands = state.bands
-    .map((b) => `<section class="band" data-band="${esc(b.key)}"><h2>${esc(b.label)} <span class="n">${b.rows.length}</span></h2>${b.rows.length ? `<div class="rows" role="listbox" aria-label="${esc(b.label)}">${b.rows.map(row).join('')}</div>` : '<div class="rows"><div class="none">Nothing here.</div></div>'}</section>`)
+    .map((b) => `<section class="band" data-band="${esc(b.key)}"><h2>${esc(b.label)} <span class="n">${b.rows.length}</span>${b.key === 'mentions' && state.mentionsError ? `<span class="n warn" title="${esc(state.mentionsError)}">couldn't refresh</span>` : ''}</h2>${b.rows.length ? `<div class="rows" role="listbox" aria-label="${esc(b.label)}">${b.rows.map(row).join('')}</div>` : '<div class="rows"><div class="none">Nothing here.</div></div>'}</section>`)
     .join('');
   const c = state.counts;
   const foot = [
@@ -100,7 +104,7 @@ const KEYS = [
   [['A'], 'Approve, when the brief cleared it on this commit (asks first)'],
   [['p'], 'Open the PR page'],
   [['o'], 'Open the PR on GitHub'],
-  [['x'], 'Set the row aside until the PR changes'],
+  [['x'], 'Set the row aside until the PR changes, or mark a mention read'],
   [['q'], 'Go to the review queue'],
   [['m'], 'Go to My PRs'],
   [['b'], 'Go to the board'],
@@ -125,7 +129,7 @@ function render() {
   const n = rows().length;
   $('#count').textContent = state.loading && !state.bands.length ? '–' : n;
   document.title = n ? `(${n}) Today` : 'Today';
-  $('#needs').innerHTML = state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(b.key === 'review' ? 'reviews' : b.key === 'move' ? 'yours' : b.key)}</span>`).join('');
+  $('#needs').innerHTML = state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', mentions: 'mentions' })[b.key] ?? b.key)}</span>`).join('');
   const when = state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   const stale = state.error && n;
   $('#fetched').textContent = state.loading ? 'Refreshing…' : stale ? `Couldn't refresh, showing ${when}` : when ? `Updated ${when}` : '';
@@ -141,7 +145,7 @@ function render() {
 }
 
 // A PR can sit in two bands (you review it and it's yours), so a row is keyed by its band too.
-const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null });
+const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null });
 
 async function load() {
   state.loading = true;
@@ -177,7 +181,7 @@ function drop(r) {
 }
 
 function openPage(r = current()) {
-  if (!r) return;
+  if (!r || r.thread) return;
   sessionStorage.setItem('todaySelected', r.key);
   sessionStorage.setItem('order', JSON.stringify(rows().map((x) => x.url)));
   sessionStorage.setItem('back', '/today');
@@ -187,7 +191,7 @@ function openPage(r = current()) {
 function openGitHub(r = current()) {
   if (!r) return;
   post('/api/open', { url: r.url });
-  say(`Opened #${r.number} on GitHub`);
+  say(`Opened ${ref(r)} on GitHub`);
 }
 
 async function approve(r = current()) {
@@ -200,10 +204,25 @@ async function approve(r = current()) {
   } else say(res.error ?? `Didn't approve #${r.number}: ${res.skipped?.[0]?.why ?? 'unknown reason'}`);
 }
 
+/** Opens a mention on GitHub and marks it read, so it leaves your GitHub inbox too. */
+async function openThread(r = current()) {
+  if (!r?.thread) return;
+  drop(r);
+  say(`Opened ${ref(r)} and marked it read`);
+  const res = await post('/api/mentions/read', { id: r.thread, open: true });
+  if (res.error) say(res.error);
+}
+
 async function setAside(r = current()) {
   if (!r) return;
+  if (r.thread) {
+    drop(r);
+    say(`Marked ${ref(r)} read`);
+    const res = await post('/api/mentions/read', { id: r.thread, open: false });
+    return res.error && say(res.error);
+  }
   drop(r);
-  say(`Set #${r.number} aside until it changes`);
+  say(`Set ${ref(r)} aside until it changes`);
   await post(r.mine ? '/api/mine/aside' : '/api/skip', { url: r.url, updatedAt: r.updatedAt });
 }
 

@@ -496,3 +496,45 @@ export async function fetchPR(url: string): Promise<PRDetail> {
     linkedIssues,
   };
 }
+
+/** A GitHub notification that wants you: an @-mention, a reply on a thread you're in, an assignment. */
+export interface Mention {
+  /** The notification thread's id, which marking it read needs. */
+  id: string;
+  reason: string;
+  repo: string;
+  title: string;
+  /** PullRequest, Issue, Discussion and so on. */
+  kind: string;
+  /** The page to open on github.com. */
+  url: string;
+  updatedAt: string;
+}
+
+/** Review requests are the review queue's, and CI, state changes and subscriptions are noise. */
+const MENTION_REASONS = new Set(['mention', 'team_mention', 'comment', 'assign']);
+
+/** Exported for tests: one notification as a row, or null for a reason Today leaves out. */
+export function toMention(n: any): Mention | null {
+  if (!MENTION_REASONS.has(n?.reason)) return null;
+  const repo: string = n.repository?.full_name ?? '';
+  const api: string = n.subject?.url ?? '';
+  const m = api.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/]+)\/(pulls|issues)\/(\d+)$/);
+  const url = m ? `https://github.com/${m[1]}/${m[2] === 'pulls' ? 'pull' : 'issues'}/${m[3]}` : (n.repository?.html_url ?? `https://github.com/${repo}`);
+  return { id: String(n.id), reason: n.reason, repo, title: n.subject?.title ?? '', kind: n.subject?.type ?? '', url, updatedAt: n.updated_at };
+}
+
+/** Your unread notifications that want you. Only Today reads these. */
+export async function fetchMentions(): Promise<Mention[]> {
+  const fixture = process.env.GH_REVIEW_NOTIFICATIONS_FIXTURE;
+  const raw: any[] = fixture
+    ? await Bun.file(fixture).json()
+    : (await gh(['api', '--paginate', 'notifications?participating=true&per_page=50', '--jq', '.[] | tojson'])).split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  return raw.map(toMention).filter((m): m is Mention => !!m);
+}
+
+/** Marks one notification read, after you open it or set it aside on Today. It touches only your inbox. */
+export async function markThreadRead(id: string): Promise<void> {
+  if (!/^\d+$/.test(id)) throw new Error(`not a notification id: ${id}`);
+  await gh(['api', '-X', 'PATCH', `notifications/threads/${id}`]);
+}
