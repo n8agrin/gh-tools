@@ -540,8 +540,8 @@ export async function markThreadRead(id: string): Promise<void> {
 }
 
 const ISSUE_OF = (url: string) => {
-  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
-  if (!m) throw new Error(`not a PR URL: ${url}`);
+  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/(\d+)$/);
+  if (!m) throw new Error(`not a PR or issue URL: ${url}`);
   return { repo: m[1], number: m[2] };
 };
 
@@ -556,7 +556,7 @@ export async function fetchLabelsAndComment(url: string, needles: string[]): Pro
   return { labels, comment: hit };
 }
 
-/** Adds or removes one label on a PR. Only a click on the PR's Depot buttons calls this. */
+/** Adds or removes one label on a PR or issue. Only a click on Today (Test on Depot, Start agent) calls this. */
 export async function setLabel(url: string, label: string, on: boolean): Promise<void> {
   const { repo, number } = ISSUE_OF(url);
   if (!label.trim()) throw new Error('no label');
@@ -570,4 +570,50 @@ export async function setLabel(url: string, label: string, on: boolean): Promise
   await gh(['api', '-X', 'DELETE', `repos/${repo}/issues/${number}/labels/${encodeURIComponent(label)}`]).catch((e) => {
     if (!/404|Label does not exist/.test(e.message)) throw e;
   });
+}
+
+/** An issue for the agent rows on Today. */
+export interface AgentIssue {
+  url: string;
+  repo: string;
+  number: number;
+  title: string;
+  labels: string[];
+  updatedAt: string;
+  /** The newest comment, which on an issue the agent is blocked on is its question. */
+  lastComment: { author: string; body: string; at: string; url: string } | null;
+}
+
+const ISSUE_QUERY = `
+query($q: String!) {
+  search(type: ISSUE, query: $q, first: 50) {
+    issueCount
+    nodes { ... on Issue { url number title updatedAt repository { nameWithOwner } labels(first: 20) { nodes { name } } comments(last: 1) { nodes { author { login } body updatedAt url } } } }
+  }
+}`;
+
+/** Exported for tests: one search node as an AgentIssue. */
+export function toAgentIssue(n: any): AgentIssue {
+  const c = n.comments?.nodes?.[0];
+  return {
+    url: n.url,
+    repo: n.repository?.nameWithOwner ?? '',
+    number: n.number,
+    title: n.title ?? '',
+    labels: (n.labels?.nodes ?? []).map((l: any) => l.name),
+    updatedAt: n.updatedAt,
+    lastComment: c ? { author: c.author?.login ?? 'ghost', body: c.body ?? '', at: c.updatedAt, url: c.url } : null,
+  };
+}
+
+/** Your open issues in the agent repos: ones with no agent label yet, ones an agent is asking you about, and how many are queued or in flight. */
+export async function fetchAgentIssues(repos: string[], labels: { ready: string; working: string; blocked: string }): Promise<{ ready: AgentIssue[]; asking: AgentIssue[]; inFlight: number }> {
+  const fixture = process.env.GH_REVIEW_AGENT_FIXTURE;
+  if (fixture) return Bun.file(fixture).json();
+  if (!repos.length) return { ready: [], asking: [], inFlight: 0 };
+  const scope = `is:issue is:open archived:false assignee:@me ${repos.map((r) => `repo:${r}`).join(' ')}`;
+  const q = (extra: string) => gh(['api', 'graphql', '-f', `query=${ISSUE_QUERY}`, '-f', `q=${scope} ${extra}`]).then((o) => JSON.parse(o).data.search);
+  const not = [labels.ready, labels.working, labels.blocked].map((l) => `-label:"${l}"`).join(' ');
+  const [ready, asking, flight] = await Promise.all([q(`${not} sort:created-asc`), q(`label:"${labels.blocked}" sort:updated-asc`), q(`label:"${labels.ready}","${labels.working}","${labels.blocked}"`)]);
+  return { ready: ready.nodes.filter((n: any) => n?.number).map(toAgentIssue), asking: asking.nodes.filter((n: any) => n?.number).map(toAgentIssue), inFlight: flight.issueCount };
 }
