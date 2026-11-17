@@ -541,7 +541,7 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .rstep.skipped .rb i { background: var(--faint); }
 .rd-opt { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .rx { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
-.rx span { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+.rx span { font-size: 13px; color: var(--text); }
 .rx i { margin-left: auto; font-style: normal; font-size: 12px; color: var(--faint); white-space: nowrap; }
 .rd-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rd-btns .btn { font-size: 12.5px; padding: 5px 10px; }
@@ -660,3 +660,7 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .rates { display: inline-flex; gap: 8px; margin-left: 10px; font-size: 12px; }
 .rates .rate { opacity: 0.6; }
 .rates .rate.on { opacity: 1; font-weight: 600; text-decoration: underline; }
+.rstep button.rl { font: inherit; text-align: left; padding: 0; background: none; border: 0; cursor: pointer; }
+.rstep button.rl:hover { text-decoration: underline; }
+.rstep .rwhy { grid-column: 2 / 5; font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.rstep.failed .rwhy { color: var(--red); }

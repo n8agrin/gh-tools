@@ -161,8 +161,8 @@ const doneEntry = () => {
 // The bug pass as a few words in the meta line, or a box when the PR should go back to its author.
 function gate() {
   const pr = state.pr;
-  if (pr.reviewedLabel && pr.labels.includes(pr.reviewedLabel)) return { word: 'Bug pass done' };
-  if (pr.copilotReviewed) return { word: 'Copilot bug pass' };
+  if (pr.reviewedLabel && pr.labels.includes(pr.reviewedLabel)) return { word: 'Author ran a bug pass', why: `The PR has the ${pr.reviewedLabel} label` };
+  if (pr.copilotReviewed) return { word: 'Copilot reviewed', why: 'Copilot submitted a review on GitHub' };
   // Without a bug-pass label in your config there's no bug pass to expect, so say nothing.
   if (!pr.reviewedLabel) return { word: '' };
   // Sending back only makes sense on an open PR you haven't approved or finished with.
@@ -222,7 +222,8 @@ const tasteExisting = (taste) => allTaste(taste).filter((q) => q.kind === 'exist
 const LENS = { duplicate: 'Duplicate', simpler: 'Simpler', consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
 
 // Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
-const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+// Only code outside the PR counts: a Simpler question's own PR: link is already the question's line link.
+const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.find((e) => !/^pr:/i.test(e.label)) ?? null;
 // A taste question can carry a sketch of the suggestion: the code now, the code after, and what it replaces.
 const hasExample = (ex) => !!(ex && (ex.before?.trim() || ex.after?.trim()));
 const codeHtml = (code, lang) => {
@@ -358,6 +359,16 @@ function runButtonHtml() {
   return `${live || state.starting ? '<span class="spin"></span>' : `<i class="rdot ${dot}"></i>`}<b>${esc(title)}</b>${sub ? `<span class="rsub">${esc(sub)}</span>` : ''}${stale && !live ? '<span class="rstale" title="New commits since the run on screen">new commits</span>' : ''}`;
 }
 
+// Where each step's output shows on the page, and the name the page gives it.
+const STEP_SECTION = { brief: 'lane', check: 'hunt', taste: 'taste', explain: 'explain', guide: 'risk', narrate: 'listen', description: 'description', help: 'help', merge: 'merge' };
+const STEP_NAME = { check: 'Bug hunt', guide: 'Reading plan' };
+const STEP_ORDER = ['worktree', 'brief', 'check', 'taste', 'guide', 'explain', 'files', 'narrate'];
+const stepLabel = (s) => (s.label === 'Check' || s.label === 'Reading guide' ? STEP_NAME[s.key] ?? s.label : s.label);
+function drawerSteps(run, live) {
+  const at = (k) => (STEP_ORDER.includes(k) ? STEP_ORDER.indexOf(k) : STEP_ORDER.length);
+  return run.steps.filter((s) => s.key !== 'gate' && !(s.key === 'worktree' && s.status === 'done' && !live)).sort((a, b) => at(a.key) - at(b.key));
+}
+
 // The run part of the drawer: which run, what's left, and a row per step with a box to tick it for Run selected.
 function drawerRun() {
   const live = liveRun();
@@ -373,12 +384,17 @@ function drawerRun() {
   if (wt?.status === 'failed') notes.push(`<span class="bad">${esc(wt.output)}</span>`);
   if (!live && doneOutput(Object.fromEntries(run.steps.map((s) => [s.key, s])), 'taste')?.verify_error) notes.push("Taste questions weren't checked against the cited code.");
   const pickable = new Set((state.checks ?? []).filter((c) => !c.unavailable).map((c) => c.key));
-  const rows = run.steps
+  // The steps in the order the page shows them. The gate only reads a label, so it isn't a step you wait on,
+  // and the worktree only matters while it's being made or when it failed.
+  const rows = drawerSteps(run, live)
     .map((s) => {
       const p = stepLeft(s);
       const box = pickable.has(s.key) ? `<input type="checkbox" data-extra="${esc(s.key)}" ${state.extras.has(s.key) ? 'checked' : ''} title="Tick to rerun just this step">` : '<span></span>';
       const x = live && (s.status === 'running' || s.status === 'queued') && s.key !== 'worktree' && s.key !== 'gate' ? `<button class="sx" type="button" data-stop="${esc(s.key)}" title="Stop just this step">×</button>` : '';
-      return `<div class="rstep ${s.status}" data-key="${esc(s.key)}" title="${esc(s.status === 'failed' || s.status === 'skipped' ? s.output ?? '' : '')}">${box}<span class="rl">${esc(s.label)}</span><span class="rt">${esc(stepTime(s))}</span>${x}<span class="rb"><i style="width:${Math.round(p.frac * 100)}%"></i></span></div>`;
+      const sec = STEP_SECTION[s.key];
+      const name = sec && s.status === 'done' ? `<button class="rl link" type="button" data-sec-go="${esc(sec)}" title="Go to this section">${esc(stepLabel(s))}</button>` : `<span class="rl">${esc(stepLabel(s))}</span>`;
+      const why = (s.status === 'failed' || (s.status === 'skipped' && s.output !== STOPPED)) && s.output ? `<span class="rwhy">${esc(String(s.output).slice(0, 240))}</span>` : '';
+      return `<div class="rstep ${s.status}" data-key="${esc(s.key)}">${box}${name}<span class="rt">${esc(stepTime(s))}</span>${x}<span class="rb"><i style="width:${Math.round(p.frac * 100)}%"></i></span>${why}</div>`;
     })
     .join('');
   return `<div class="rd-title"><b>${live ? `Run ${live.id} running` : `Run ${run.id}`}</b><span id="rd-left" class="${live ? 'warn' : ''}">${esc(left)}</span></div>${notes.length ? `<p class="rd-note">${notes.join(' ')}</p>` : ''}<div class="rd-steps">${rows}</div>`;
@@ -389,11 +405,11 @@ function drawerHtml() {
   const r = shownRun();
   const run = live ?? r;
   const busy = !!live || state.starting;
-  const colors = ['green', 'yellow', 'red'].map((c) => `<button type="button" data-color="${c}" class="c-${c} ${state.override === c ? 'on' : ''}" title="${COLOR[c]} (${c[0]})"><i></i>${COLOR[c]}</button>`).join('');
   const inRun = new Set((run?.steps ?? []).map((s) => s.key));
-  const others = (state.checks ?? state.optional.map((o) => ({ ...o, optional: true }))).filter((c) => !inRun.has(c.key));
+  const at = (k) => (STEP_ORDER.includes(k) ? STEP_ORDER.indexOf(k) : STEP_ORDER.length);
+  const others = (state.checks ?? state.optional.map((o) => ({ ...o, optional: true }))).filter((c) => !inRun.has(c.key)).sort((a, b) => Number(!!a.optional) - Number(!!b.optional) || at(a.key) - at(b.key));
   const extras = others
-    .map((c) => `<label class="rx ${c.unavailable ? 'faint' : ''}" title="${esc(c.unavailable ?? c.hint ?? '')}"><input type="checkbox" data-extra="${esc(c.key)}" ${state.extras.has(c.key) ? 'checked' : ''} ${c.unavailable ? 'disabled' : ''}><span>${esc(c.label)}</span><i>${c.optional ? 'optional, not run' : 'not in this run'}</i></label>`)
+    .map((c) => `<label class="rx ${c.unavailable ? 'faint' : ''}" title="${esc(c.unavailable ?? c.hint ?? '')}"><input type="checkbox" data-extra="${esc(c.key)}" ${state.extras.has(c.key) ? 'checked' : ''} ${c.unavailable ? 'disabled' : ''}><span>${esc(stepLabel(c))}</span><i>${c.optional ? 'optional' : 'not in this run'}</i></label>`)
     .join('');
   const n = state.extras.size;
   const sameHead = r && state.pr && r.headSha === state.pr.headSha;
@@ -402,9 +418,8 @@ function drawerHtml() {
   const pick = state.reviews.length > 1 ? `<select id="pick">${state.reviews.map((x) => `<option value="${x.id}" ${x.id === r?.id ? 'selected' : ''}>Run ${x.id} · ${when(x.startedAt)} · ${x.error === STOPPED ? 'stopped' : x.status}</option>`).join('')}</select>` : '';
   const hints = state.optional.filter((o) => o.hint && state.extras.has(o.key)).map((o) => `<p class="rd-foot">${esc(o.label)}: ${esc(o.hint)}</p>`).join('');
   return `<div class="rd-head"><span>Review run</span><button type="button" id="rd-close" title="Close (⇧D)">✕</button></div>
-    <div class="rd-body"><span class="yourcall"><span>Your call</span><span class="seg3">${colors}</span></span>
-    <div id="rd-live">${drawerRun()}</div>
-    ${extras ? `<div class="rd-opt"><span class="kicker">Optional</span>${extras}</div>` : ''}
+    <div class="rd-body"><div id="rd-live">${drawerRun()}</div>
+    ${extras ? `<div class="rd-opt"><span class="kicker">${others.every((c) => c.optional) ? 'Optional' : 'More steps'}</span>${extras}</div>` : ''}
     <div class="rd-btns">${sel}${main}${pick}</div>
     <p class="rd-foot">Tick steps to redo just those. Runs locally in a throwaway worktree. Nothing is posted to GitHub.</p>${hints}</div>`;
 }
@@ -469,7 +484,12 @@ function sidebar(m) {
   const R = state.reviewed;
   const reading = m.groups.filter((x) => x.key !== 'routine').flatMap((x) => x.files);
   const done = reading.filter((f) => R.has(f.file)).length;
-  const left = reading.filter((f) => !R.has(f.file)).reduce((a, f) => a + mins(f), 0) + (R.has('brief') ? 0 : 2);
+  // The reading plan's minutes, less the share of lines you've read, so this and the plan agree.
+  const planned = doneOutput(m.steps, 'guide')?.minutes;
+  const unread = reading.filter((f) => !R.has(f.file));
+  const all = lines(reading);
+  const files = planned && all ? Math.round((planned * lines(unread)) / all) : unread.reduce((a, f) => a + mins(f), 0);
+  const left = files + (R.has('brief') ? 0 : 2);
   const sig = signalOf(m.steps);
   let html = '';
   if (g.sendBack) html += `<div class="sendback"><span class="k1">Send back</span><b>Author should run a bug pass</b><span>No bug-pass label and no Copilot review.</span></div>`;
@@ -551,7 +571,8 @@ function headMeta() {
   if (pr.isDraft) bits.push('<span class="draft-pill">Draft</span>');
   if (p?.ci === 'failure') bits.push('<span class="bad">CI failing</span>');
   if (p?.ci === 'pending') bits.push('CI running');
-  if (gate().word) bits.push(gate().word);
+  const g = gate();
+  if (g.word) bits.push(`<span title="${esc(g.why ?? '')}">${esc(g.word)}</span>`);
   const stack = stackPips();
   if (stack) bits.push(stack);
   return `<div class="meta">${bits.map((b) => `<span>${b}</span>`).join('')}</div>`;
@@ -559,10 +580,12 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], hunt: ['check'] };
+const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['guide', 'signal'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], hunt: ['check'] };
 const rerunBtn = (id) => {
-  const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
-  if (!keys) return '';
+  // Only steps your config still has; a retired one (signal, merge) would be dropped by the server anyway.
+  const has = (k) => !state.checks || state.checks.some((c) => c.key === k);
+  const keys = (SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null))?.filter(has);
+  if (!keys?.length) return '';
   return shownRun() && !liveRun() ? `<button class="ask-md rerun-sec" type="button" data-only="${esc(keys.join(','))}" title="Rerun just this section, keeping the rest of the run">Rerun</button>` : '';
 };
 const bsec = (id, title, body, extra = '', cls = '') => `<section class="bsec ${cls}" id="c-${id}" data-sec="${id}"><div class="shead"><h2>${esc(title)}</h2>${extra}${tools.replace('<span class="tools">', `<span class="tools">${rerunBtn(id)}`)}</div><div class="sec-body">${body}</div></section>`;
@@ -815,7 +838,7 @@ function brief(m) {
   if (!call && briefed && r && !steps.brief) call = bsec('lane', 'Brief', `<div class="flag">This run is from before the brief, so it has no lane, decisions or claims. ${liveRun() ? 'Write it once this run finishes.' : `<button class="link rerun-sec" type="button" data-only="brief">Write the brief</button> (about 2 minutes; the rest of this run stays).`}</div>`, '', 'first');
   html += call;
 
-  // Risk: the color, the numbers and the map.
+  // Reading plan: the numbers and the map of what to read.
   const sig = signalOf(steps);
   let risk = '';
   const why = state.override ? (doneOutput(steps, 'signal') ? `The run said ${esc(COLOR[doneOutput(steps, 'signal').color].toLowerCase())}: ${t(doneOutput(steps, 'signal').reason)}.` : '') : sig?.floor?.length ? `Path floor: ${plural(sig.floor.length, 'file')} on a red path ${sig.floor.length === 1 ? 'is' : 'are'} always read in full.` : sig?.raisedBy ? `Raised by a check, was ${esc(sig.raisedBy)}.` : '';
@@ -823,25 +846,24 @@ function brief(m) {
   if (m.lists) risk += stats(m) + fileMap(m.lists.main, m.lists.routine);
   const g = doneOutput(steps, 'guide');
   if (g && !g.files) risk += `<div class="flag">This run is from before the file list. Run review again (<kbd>⇧R</kbd>) to get it.</div>`;
+  if (!g && pendingBody(steps.guide)) risk += pendingBody(steps.guide);
   // The run itself lives in the bottom bar and its drawer (⇧D); the brief only says when there's nothing yet.
-  if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the color, the numbers and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
+  if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the brief, the bug hunt and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
-  if (risk || sigHead) html += bsec('risk', 'Risk', risk, sigHead, call ? '' : 'first');
-  html += listenSection(m);
+  const plan = risk || sigHead ? bsec('risk', legacy ? 'Risk' : 'Reading plan', risk, sigHead, call ? '' : 'first') : '';
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.
+  let help = '';
   const h = legacy && doneOutput(steps, 'help');
   if (h) {
     const asks = (h.asks ?? []).map((a) => `<div class="ask"><p><b>${t(a.question)}</b> ${t(a.stake)} ${a.where ? whereLink(a.where, r.headSha) : ''}</p>${a.why_you ? `<p class="why">${t(a.why_you)}</p>` : ''}</div>`);
-    html += bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
-  } else if (legacy && steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+    help = bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
+  } else if (legacy && steps.help && steps.help.status !== 'skipped') help = bsec('help', 'Where you can help', stepBody(steps.help));
 
-  html += claimsSection(bf, r);
-  html += shapeSection(bf);
-  html += huntSection(steps, r);
+  const hunt = huntSection(steps, r) || (pendingBody(steps.check) ? bsec('hunt', 'Bug hunt', pendingBody(steps.check)) : '');
 
   const talk = conversation();
-  if (talk) html += bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`);
+  const convo = talk ? bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`) : '';
 
   // Description: what the author wrote, next to where it and the diff disagree.
   const d = doneOutput(steps, 'description');
@@ -855,14 +877,16 @@ function brief(m) {
     const n = items.length;
     gaps = `<div class="gaps"><span class="kicker"><span>Description gaps</span><span class="${n ? 'c-yellow' : ''}">${n || '✓'}</span></span>${n ? items.join('') : `<p class="ok">Matches the diff. ${t(d.summary)}</p>`}</div>`;
   } else if (steps.description) gaps = `<div class="gaps">${stepBody(steps.description)}</div>`;
-  html += bsec('description', 'Description', `<div class="desc2">${written}${gaps}</div>`);
+  const desc = bsec('description', 'Description', `<div class="desc2">${written}${gaps}</div>`);
 
-  if (steps.explain?.status === 'done' && ex) html += bsec('explain', 'How this works', `<div class="how">${ex.steps.map((s) => howStep(s, r.headSha)).join('')}</div>`);
-  else if (steps.explain) html += bsec('explain', 'How this works', stepBody(steps.explain));
+  let how = '';
+  if (steps.explain?.status === 'done' && ex) how = bsec('explain', 'How this works', `<div class="how">${ex.steps.map((s) => howStep(s, r.headSha)).join('')}</div>`);
+  else if (steps.explain) how = bsec('explain', 'How this works', stepBody(steps.explain));
 
+  let taste = '';
   const qs = tasteQuestions(doneOutput(steps, 'taste'));
   const existing = tasteExisting(doneOutput(steps, 'taste'));
-  if (!qs.length && !existing.length && pendingBody(steps.taste)) html += bsec('taste', 'Taste questions', pendingBody(steps.taste));
+  if (!qs.length && !existing.length && pendingBody(steps.taste)) taste = bsec('taste', 'Taste questions', pendingBody(steps.taste));
   if (qs.length || existing.length) {
     const row = (q, label) => {
       const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
@@ -870,8 +894,12 @@ function brief(m) {
     };
     let body = qs.map((q) => row(q, LENS[q.lens] ?? q.lens)).join('');
     if (existing.length) body += `<span class="kicker taste-sub">While you're here: the existing code, not for the author</span>${existing.map((q) => row(q, 'Existing code')).join('')}`;
-    html += bsec('taste', 'Taste questions', body, `<span class="sub">Questions for the author, checked against prior art and the area's standards</span>`);
+    const newLenses = qs.every((q) => q.lens === 'duplicate' || q.lens === 'simpler');
+    taste = bsec('taste', 'Taste questions', body, `<span class="sub">${newLenses ? 'Code that already exists elsewhere, and simpler ways to write it' : "Questions for the author, checked against prior art and the area's standards"}</span>`);
   }
+
+  // The brief first, then what the agents found, then the reading plan and the rest. A legacy run keeps its old order.
+  html += legacy ? plan + listenSection(m) + help + claimsSection(bf, r) + shapeSection(bf) + hunt + convo + desc + how + taste : hunt + claimsSection(bf, r) + shapeSection(bf) + taste + plan + convo + how + desc + listenSection(m);
   for (const s of r?.steps ?? []) if (!SHOWN.includes(s.key)) html += bsec(s.key, s.label, `<div class="other">${hasFindings(s.key) && s.status === 'done' && pr.mine ? findingsPick(r, s) : ''}${stepBody(s)}</div>`);
 
   const read = state.reviewed.has('brief');
@@ -2046,6 +2074,11 @@ $('#rundrawer').addEventListener('click', (e) => {
   if (id === 'stop-run') return stopRun();
   const sx = e.target.closest('[data-stop]');
   if (sx) return stopRun(sx.dataset.stop);
+  const go = e.target.closest('[data-sec-go]');
+  if (go) {
+    if (state.cur !== 'brief') open('brief');
+    return requestAnimationFrame(() => document.getElementById(`c-${go.dataset.secGo}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
   const color = e.target.closest('[data-color]');
   if (color) return setColor(color.dataset.color);
 });
