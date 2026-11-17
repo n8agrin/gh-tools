@@ -26,7 +26,7 @@ In the copy, replace the `"owner/repo": "~/src/repo"` line under `checkouts` wit
 Run these from the repo root, or the same names from `apps/gh-review`:
 
 ```bash
-bun start          # http://localhost:4790
+bun start          # http://localhost:4790 opens on Today; the review queue is /queue
 bun run dev        # the same, restarting when the code changes
 bun run queue      # the same list in the terminal (--json for scripts)
 bun run demo       # sample data, no GitHub needed
@@ -59,7 +59,7 @@ My PRs (`/mine`) has a Board link (`b`). On My PRs, `e` marks the selected PR do
 
 ## Today
 
-`/today` is one list of everything where you hold the ball. Review requests come first, oldest first, each with what its brief left for you; then your own PRs that can move (ship, undraft, fix findings, blocked), closest to landing first. Each row has one main button on `Enter`: open the brief, approve (only when the brief cleared it on the current commit, and after a confirm), or open the PR on GitHub to merge or undraft. `x` sets a row aside until the PR changes, the same set-aside as the review queue and My PRs. Your PRs waiting on others and ones with no bug pass yet are counts at the bottom, not rows.
+Today (`/`, the home page) is one list of everything where you hold the ball. Review requests come first, oldest first, each with what its brief left for you; then your own PRs that can move (ship, undraft, fix findings, blocked), closest to landing first. Each row has one main button on `Enter`: open the brief, approve (only when the brief cleared it on the current commit, and after a confirm), or open the PR on GitHub to merge or undraft. `x` sets a row aside until the PR changes, the same set-aside as the review queue and My PRs. Your PRs waiting on others and ones with no bug pass yet are counts at the bottom, not rows.
 
 Below them come **Mentions and replies**: your unread GitHub notifications for @-mentions (yours or a team's), new comments on threads you're in, and assignments. Review requests, CI and subscriptions are left out, and a mention on a PR that already has a row above doesn't get a second one. `Enter` opens the thread and marks it read; `x` marks it read without opening it. Both touch only your notifications. Reading notifications needs the `notifications` scope on your gh login: `gh auth refresh -s notifications`. Without it the band says it couldn't refresh and the rest of the page works.
 

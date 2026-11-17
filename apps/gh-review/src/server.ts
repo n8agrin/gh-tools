@@ -406,7 +406,8 @@ const server = Bun.serve({
         }
       }
       // /pr/<owner>/<repo>/<number> is the in-app PR page; the page reads the rest from the URL.
-      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/today' ? 'today.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
+      if (pathname === '/today') return Response.redirect('/', 301);
+      const page = pathname === '/' ? 'today.html' : pathname === '/queue' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
       const file = Bun.file(join(PUBLIC, page));
       if (!file.name!.startsWith(PUBLIC) || !(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);
