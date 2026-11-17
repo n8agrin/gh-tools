@@ -1309,7 +1309,9 @@ const fromNote = (path, line, key) => state.comments.find((c) => c.path === path
 function noteBtn(path, line, x) {
   const added = fromNote(path, line, noteKey(x));
   if (added) return `<button class="link nadd" type="button" data-jump="${added.id}" title="Already a pending comment on line ${line}">In your review ✓</button>`;
-  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
+  // Add puts the note in your review as written; Comment opens it on the line for you to edit first.
+  const at = `data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}"`;
+  return `<span class="nacts"><button class="btn sm" type="button" data-note-add ${at} title="Adds it to your pending review on line ${line} as written">Add</button><button class="link nadd" type="button" ${at} data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Comment</button></span>`;
 }
 
 // Useful or noise on each Check and Taste note, kept locally so /calibration can show each lens's hit rate.
@@ -2105,6 +2107,11 @@ $('#page').addEventListener('click', (e) => {
   if (rb) {
     const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === rb.dataset.key);
     return x && rate(x, state.ratings[rb.dataset.key] === rb.dataset.rate ? null : rb.dataset.rate);
+  }
+  const na = e.target.closest('[data-note-add]');
+  if (na) {
+    const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === na.dataset.noteKey);
+    return x && addNote({ ...x, file: na.dataset.notePath, lines: na.dataset.noteLine });
   }
   const nadd = e.target.closest('[data-note-text]');
   if (nadd) return draftFromNote(nadd);
