@@ -208,6 +208,12 @@ const RANK = { green: 0, yellow: 1, red: 2 };
 const CALL = { merge: 'Merge', fixes: 'Merge with fixes', review: 'Merge with review', block: 'Do not merge' };
 const CALL_TONE = { merge: 'green', fixes: 'green', review: 'yellow', block: 'red' };
 const CALL_SUB = { merge: 'Good as it is', fixes: 'Safe to merge as it is, better with these changes', review: 'Needs a careful read before it merges', block: 'Something is broken' };
+// The brief's lane: what this PR needs from you.
+const LANE = { approve: 'Agent approves', answer: 'Answer questions', read: 'Read it', block: 'Do not merge' };
+const LANE_TONE = { approve: 'green', answer: 'yellow', read: 'red', block: 'red' };
+const LANE_SUB = { approve: 'Nothing here needs you. Approve when CI is green.', answer: 'Approve once you answer these.', read: 'A full read, for the reasons below.', block: 'Something is broken.' };
+const CLAIM = { verified: ['Verified', 'ok'], deliberate: ['Deliberate', 'ok'], author_data: ["Author's data", 'info'], unverified: ['Unverified', 'warn'], not_done: ['Not done', 'warn'], contradicted: ['Contradicted', 'bad'] };
+const GROUP = { core: 'Core · read this', pattern: 'Pattern', tests: 'Tests', other: 'Other' };
 const doneOutput = (steps, k) => (steps[k]?.status === 'done' ? parse(steps[k]) : null);
 // Questions for the author. Area standards can also note shortfalls in the existing code (kind "existing"); those are for you, not the author.
 const allTaste = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
@@ -263,7 +269,10 @@ const isCheck = (n) => n.kind === 'check' || n.kind === 'finding';
 // A file on a red path or with a Check finding always gets read, even when the guide called it routine.
 function fileItems(steps) {
   const g = doneOutput(steps, 'guide');
-  const floor = new Set((doneOutput(steps, 'signal')?.floor ?? []).map((f) => f.file));
+  const b = doneOutput(steps, 'brief');
+  const floor = new Set((b?.floor ?? doneOutput(steps, 'signal')?.floor ?? []).map((f) => f.file));
+  // Files the brief found applying one mechanical edit, with no outliers, read as routine.
+  const pattern = new Set((b?.groups ?? []).filter((x) => x.kind === 'pattern').flatMap((x) => x.files.filter((f) => !x.outliers.includes(f))));
   const sizes = Object.fromEntries((state.pr?.files ?? []).map((f) => [f.path, f]));
   const seen = new Set(g.files.map((f) => f.file));
   // Files the guide left out still show, so nothing changed goes unlisted.
@@ -272,7 +281,7 @@ function fileItems(steps) {
   for (const x of doneOutput(steps, 'check')?.findings ?? []) if ((RANK[x.color] ?? 0) > (RANK[found[x.file]] ?? -1)) found[x.file] = x.color;
   const items = all.map((f) => {
     const color = floor.has(f.file) ? 'red' : (RANK[found[f.file]] ?? -1) > (RANK[f.color] ?? 1) ? found[f.file] : f.color;
-    return { ...f, color, add: sizes[f.file]?.additions ?? 0, del: sizes[f.file]?.deletions ?? 0, routine: f.routine && !floor.has(f.file) && !found[f.file] };
+    return { ...f, color, add: sizes[f.file]?.additions ?? 0, del: sizes[f.file]?.deletions ?? 0, routine: (f.routine || pattern.has(f.file)) && !floor.has(f.file) && !found[f.file] };
   });
   return { items, main: items.filter((f) => !f.routine).sort((a, b) => (RANK[b.color] ?? 1) - (RANK[a.color] ?? 1)), routine: items.filter((f) => f.routine) };
 }
@@ -466,6 +475,8 @@ function sidebar(m) {
   if (g.sendBack) html += `<div class="sendback"><span class="k1">Send back</span><b>Author should run a bug pass</b><span>No bug-pass label and no Copilot review.</span></div>`;
   html += `<section class="prog"><div class="top"><span><span class="big">${done}</span><span class="of">of ${reading.length} reviewed</span></span><span class="left">${left ? `~${left} min left` : 'nothing left'}</span></div>`;
   html += `<span class="pbar">${reading.map((f) => `<i class="${R.has(f.file) ? 'on' : ''}"></i>`).join('')}</span>`;
+  const lane = doneOutput(m.steps, 'brief');
+  if (lane && LANE[lane.lane]) html += `<span class="risk c-${LANE_TONE[lane.lane]}"><i class="dot"></i><b>${esc(LANE[lane.lane])}</b><span class="rs" title="${esc(lane.intent)}">${lane.lane === 'answer' ? esc(plural(lane.decisions.length, 'question')) : esc(lane.kind || lane.intent)}</span></span>`;
   const mc = doneOutput(m.steps, 'merge');
   if (mc && CALL[mc.call]) html += `<span class="risk c-${CALL_TONE[mc.call]}"><i class="dot"></i><b>${esc(CALL[mc.call])}</b><span class="rs" title="${esc(mc.reason)}">${esc(mc.reason)}</span></span>`;
   if (sig) html += `<span class="risk c-${esc(sig.color)}"><i class="dot"></i><b>${esc(sig.title)}</b><span class="rs" title="${esc(sig.reason)}">${esc(sig.reason)}</span></span>`;
@@ -475,7 +486,7 @@ function sidebar(m) {
   const d = doneOutput(m.steps, 'description');
   const nGaps = d ? d.gaps.length + (d.ui_change && !d.has_screenshots ? 1 : 0) : 0;
   const gaps = d?.verdict === 'no description' ? 'no description' : nGaps ? plural(nGaps, 'gap') : '';
-  html += `<div class="grp"><span class="glabel"><span>Read first</span><span>${R.has('brief') ? 'read' : ''}</span></span>${item('brief', 'Risk, description and how it works', gaps, !!gaps)}</div>`;
+  html += `<div class="grp"><span class="glabel"><span>Read first</span><span>${R.has('brief') ? 'read' : ''}</span></span>${item('brief', 'Brief: the call, claims and shape', lane?.decisions?.length ? plural(lane.decisions.length, 'question') : gaps, !!(lane?.decisions?.length || gaps))}</div>`;
   for (const grp of m.groups) {
     const count = `${grp.files.filter((f) => R.has(f.file)).length}/${grp.files.length}`;
     html += `<div class="grp"><span class="glabel"><span>${esc(grp.label)}</span><span>${count}</span></span>`;
@@ -548,7 +559,7 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
+const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
 const rerunBtn = (id) => {
   const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
   if (!keys) return '';
@@ -609,7 +620,7 @@ function stepBody(step) {
 }
 
 // Steps the brief and the files already show. Anything else, like the optional checks, gets its own section.
-const SHOWN = ['gate', 'worktree', 'merge', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files', 'narrate'];
+const SHOWN = ['gate', 'worktree', 'brief', 'merge', 'help', 'explain', 'guide', 'description', 'signal', 'check', 'taste', 'risk', 'files', 'narrate'];
 
 // The first sentence of each step leads in bold, so the list reads as a summary at a glance.
 function howStep(s, sha) {
@@ -710,13 +721,76 @@ function mergeSection(steps, r) {
   return bsec('merge', 'Merge call', `<div class="merge">${body}</div>`, '', 'first');
 }
 
+// The lane, the intent and the decisions that need you, front and center.
+function laneSection(steps, r) {
+  const b = doneOutput(steps, 'brief');
+  if (!b) return steps.brief && steps.brief.status !== 'skipped' ? bsec('lane', 'Brief', stepBody(steps.brief), '', 'first') : '';
+  const lane = LANE[b.lane] ? b.lane : 'answer';
+  const where = (w) => (w ? whereLink(w, r.headSha) : '');
+  let body = `<div class="mcall c-${LANE_TONE[lane]}"><span class="mword"><i></i>${esc(LANE[lane])}</span><span class="msub">${esc(LANE_SUB[lane])}</span></div>`;
+  const lead = [b.kind && `<b>${t(b.kind[0].toUpperCase() + b.kind.slice(1))}.</b>`, b.intent && t(b.intent)].filter(Boolean).join(' ');
+  if (lead) body += `<p class="mreason">${lead}</p>`;
+  if (b.behavior_change && !/^none/i.test(b.behavior_change)) body += `<p class="mwhy"><b>Behavior change:</b> ${t(b.behavior_change)}</p>`;
+  const mine = state.pr.mine;
+  body += (b.decisions ?? [])
+    .map(
+      (d, i) => `<div class="decision"><span class="kicker">Your decision${b.decisions.length > 1 ? ` ${i + 1} of ${b.decisions.length}` : ''}</span><p class="dq">${t(d.question)}</p><p class="ds">${t(d.stake)}${d.why_you ? ` <span class="faint">${t(d.why_you)}</span>` : ''}</p>${d.where ? `<p class="dw">Look at ${where(d.where)}</p>` : ''}<span class="dacts"><button class="btn" type="button" data-decide="ask" data-i="${i}">Ask the author</button>${d.where ? `<button class="btn quiet" type="button" data-decide="read" data-i="${i}">Read the code first</button>` : ''}</span></div>`,
+    )
+    .join('');
+  // One approve for the whole brief: answering yes to every decision is what approving means here.
+  const n = b.decisions?.length ?? 0;
+  if ((lane === 'approve' || lane === 'answer') && !mine) body += `<span class="dacts"><button class="btn primary" type="button" data-decide="approve">${n ? `Accept ${n === 1 ? 'it' : n === 2 ? 'both' : `all ${n}`} and approve` : 'Approve'}</button></span>`;
+  if (b.fixes?.length) body += `<span class="kicker">Worth fixing before merge</span><ul class="mfixes">${b.fixes.map((f) => `<li>${t(f.fix)} ${where(f.where)}</li>`).join('')}</ul>`;
+  const why = [];
+  for (const x of b.raises ?? []) why.push(`<p><span class="tag up">Raised</span> ${t(x.why)} ${where(x.where)}${x.quote ? `<code class="quote">${esc(x.quote)}</code>` : ''}</p>`);
+  for (const x of b.lowers ?? []) why.push(`<p><span class="tag down">Lowered</span> ${t(x.why)} ${where(x.where)}</p>`);
+  if (b.movedFrom) why.push(`<p class="riskwhy">The AI said ${esc(LANE[b.movedFrom]?.toLowerCase() ?? b.movedFrom)}; moved because ${esc((b.movedBy ?? []).join(', and '))}.</p>`);
+  if (why.length) body += `<details class="lanewhy"><summary>Why this lane</summary>${why.join('')}</details>`;
+  return bsec('lane', 'Brief', `<div class="merge">${body}</div>`, '', 'first');
+}
+
+// Every claim from the issue and the description, with what settles it.
+function claimsSection(b, r) {
+  if (!b?.claims?.length) return '';
+  const rows = b.claims
+    .map((c) => {
+      const [word, tone] = CLAIM[c.status] ?? CLAIM.unverified;
+      return `<tr><td>${t(c.claim)}${c.source ? ` <span class="faint">${esc(c.source)}</span>` : ''}</td><td><span class="cst ${tone}">${esc(word)}</span></td><td>${c.proof ? '<span class="tag proof">Proof test</span> ' : ''}${t(c.evidence)} ${c.where ? whereLink(c.where, r.headSha) : ''}</td></tr>`;
+    })
+    .join('');
+  const open = b.claims.filter((c) => ['unverified', 'not_done', 'contradicted'].includes(c.status)).length;
+  return bsec('claims', 'What the agent checked', `<div class="claims"><table><thead><tr><th>Claim</th><th>Status</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="sub">${open ? `${plural(open, 'claim')} still open` : 'Every claim settled'}</span>`);
+}
+
+// The diff as a few items: the core change, each repeated edit, the tests.
+function shapeSection(b) {
+  if (!b?.groups?.length) return '';
+  const sizes = Object.fromEntries((state.pr?.files ?? []).map((f) => [f.path, f]));
+  const cards = b.groups
+    .map((g) => {
+      const add = g.files.reduce((a, f) => a + (sizes[f]?.additions ?? 0), 0);
+      const del = g.files.reduce((a, f) => a + (sizes[f]?.deletions ?? 0), 0);
+      const label = g.kind === 'pattern' ? (g.outliers.length ? `Pattern · ${plural(g.outliers.length, 'outlier')}` : `Pattern · ${g.files.length} of ${g.files.length} match`) : GROUP[g.kind];
+      const first = g.outliers[0] ?? g.files[0];
+      return `<button type="button" class="shape ${g.kind}" data-go="${esc(first)}"><span class="kicker">${esc(label)}</span><b>${t(g.title)}</b><span class="faint">${plural(g.files.length, 'file')}, +${num(add)} −${num(del)}${g.note ? ` · ${esc(g.note)}` : ''}</span>${g.outliers.length ? `<span class="c-yellow">Differs: ${g.outliers.map((f) => esc(shortName(f))).join(', ')}</span>` : ''}</button>`;
+    })
+    .join('');
+  return bsec('shape', 'Shape of the change', `<div class="shapes">${cards}</div>`, `<span class="sub">${plural(state.pr.files.length, 'file')} as ${plural(b.groups.length, 'item')}</span>`);
+}
+
 function brief(m) {
   const pr = state.pr;
   const { r, steps } = m;
   const ex = doneOutput(steps, 'explain');
-  let html = `<div class="brief"><div class="head"><span class="kicker">Read first · about 2 min</span><h1>${esc(pr.title)}</h1>${headMeta()}${ex ? `<p class="purpose">${t(ex.one_liner)}</p>` : ''}</div>`;
+  const bf = doneOutput(steps, 'brief');
+  let html = `<div class="brief"><div class="head"><span class="kicker">Read first · about 2 min</span><h1>${esc(pr.title)}</h1>${headMeta()}${ex && !bf ? `<p class="purpose">${t(ex.one_liner)}</p>` : ''}</div>`;
 
-  const call = mergeSection(steps, r);
+  // A config with the brief has retired the merge call and the help list; a run from before it
+  // still carries them, so offer the brief in their place instead of showing the old page.
+  const briefed = !!state.checks?.some((c) => c.key === 'brief');
+  const legacy = !briefed;
+  let call = laneSection(steps, r) || (legacy ? mergeSection(steps, r) : '');
+  if (!call && briefed && r && !steps.brief) call = bsec('lane', 'Brief', `<div class="flag">This run is from before the brief, so it has no lane, decisions or claims. ${liveRun() ? 'Write it once this run finishes.' : `<button class="link rerun-sec" type="button" data-only="brief">Write the brief</button> (about 2 minutes; the rest of this run stays).`}</div>`, '', 'first');
   html += call;
 
   // Risk: the color, the numbers and the map.
@@ -730,15 +804,18 @@ function brief(m) {
   // The run itself lives in the bottom bar and its drawer (⇧D); the brief only says when there's nothing yet.
   if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the color, the numbers and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
-  html += bsec('risk', 'Risk', risk, sigHead, call ? '' : 'first');
+  if (risk || sigHead) html += bsec('risk', 'Risk', risk, sigHead, call ? '' : 'first');
   html += listenSection(m);
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.
-  const h = doneOutput(steps, 'help');
+  const h = legacy && doneOutput(steps, 'help');
   if (h) {
     const asks = (h.asks ?? []).map((a) => `<div class="ask"><p><b>${t(a.question)}</b> ${t(a.stake)} ${a.where ? whereLink(a.where, r.headSha) : ''}</p>${a.why_you ? `<p class="why">${t(a.why_you)}</p>` : ''}</div>`);
     html += bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
-  } else if (steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+  } else if (legacy && steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+
+  html += claimsSection(bf, r);
+  html += shapeSection(bf);
 
   const talk = conversation();
   if (talk) html += bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`);
@@ -1103,6 +1180,19 @@ function jumpToComment(id) {
   if (!c) return;
   state.jump = id;
   open(c.path);
+}
+
+// The brief's buttons: approve, ask the author the decision's question, or open the code it points at.
+// Approve and ask only fill in the review form; nothing goes to GitHub until you press its button.
+function decideFromBrief(kind, i) {
+  const d = doneOutput(model().steps, 'brief')?.decisions?.[i];
+  if (kind === 'read') {
+    const path = (d?.where ?? '').split(':')[0];
+    return state.pr.files.some((f) => f.path === path) ? open(path) : markCurrent();
+  }
+  state.verdict = kind === 'approve' ? 'APPROVE' : 'COMMENT';
+  if (kind === 'ask' && d) state.summary = [state.summary.trim(), `${d.question}${d.stake ? `\n\n${d.stake}` : ''}`].filter(Boolean).join('\n\n');
+  openSubmit();
 }
 
 function openSubmit() {
@@ -1781,6 +1871,10 @@ $('#side').addEventListener('click', (e) => {
 $('#page').addEventListener('click', (e) => {
   const id = e.target.closest('button')?.id;
   if (id === 'run') return runReview();
+  const decide = e.target.closest('[data-decide]');
+  if (decide) return decideFromBrief(decide.dataset.decide, Number(decide.dataset.i));
+  const shape = e.target.closest('.shape[data-go]');
+  if (shape) return open(shape.dataset.go);
   if (id === 'narr-write') return writeNarration();
   const play = e.target.closest('.narr-play');
   if (play) return togglePlayer(play.dataset.scope);

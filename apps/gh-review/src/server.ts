@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
 import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
@@ -11,6 +11,8 @@ import { allChecks, listReviews, optionalChecks, startReview, stopReview } from 
 import { stagesFor } from './stage';
 
 const PORT = Number(process.env.PORT ?? 4790);
+/** A lane earns bulk approval at this agreement over at least this many PRs. Tune it to taste. */
+const GATE = { agreement: 0.95, prs: 50 };
 const PUBLIC = join(import.meta.dir, '..', 'public');
 
 async function openInBrowser(url: string) {
@@ -79,6 +81,10 @@ const server = Bun.serve({
         const q = new URL(req.url).searchParams;
         const run = findingsRun(q.get('url') ?? '', Number(q.get('review')), q.get('key') ?? '');
         return json({ run });
+      }
+      if (pathname === '/api/calibration') {
+        const rows = calibration().map((r) => ({ ...r, agrees: agrees(r.lane, r.outcome) }));
+        return json({ rows, gate: GATE });
       }
       if (pathname === '/api/runs') return json(listRuns());
       if (pathname === '/api/live') return json(liveReviews());
@@ -188,11 +194,40 @@ const server = Bun.serve({
             return json({ error: (e as Error).message }, 400);
           }
           const res = await submitReview(body.url, payload);
+          recordOutcome(body.url, payload.commit_id, payload.event, payload.comments.length);
           // Move it to Done now instead of waiting for the next fetch to see the review.
           const review = ({ APPROVE: 'APPROVED', REQUEST_CHANGES: 'CHANGES_REQUESTED' } as const)[payload.event as 'APPROVE'];
           const pr = cachedPR(body.url);
           if (review && pr) saveReviewed([{ pr: { ...pr, myReview: review }, review, at: new Date().toISOString() }]);
           return json(res);
+        }
+        if (pathname === '/api/approve') {
+          // Bulk approve from the queue's Agent approves lane, only after the key press and a confirm there.
+          // Each PR must still be in that lane on the head it was briefed on, or it's left alone.
+          const urls: string[] = Array.isArray(body.urls) ? body.urls.map(String) : [];
+          if (!urls.length) return json({ error: 'Pick at least one PR.' }, 400);
+          const sums = reviewSummaries();
+          const done: string[] = [];
+          const skipped: { url: string; why: string }[] = [];
+          for (const url of urls) {
+            const pr = cachedPR(url);
+            const s = sums[url];
+            if (!pr) skipped.push({ url, why: 'not in the queue' });
+            else if (s?.lane !== 'approve') skipped.push({ url, why: 'not in the Agent approves lane' });
+            else if (s.headSha !== pr.headSha) skipped.push({ url, why: 'new commits since the brief' });
+            else if (pr.author === (await me())) skipped.push({ url, why: 'your own PR' });
+            else {
+              try {
+                await submitReview(url, reviewPayload('APPROVE', '', [], pr.headSha));
+                recordOutcome(url, pr.headSha, 'APPROVE', 0);
+                saveReviewed([{ pr: { ...pr, myReview: 'APPROVED' }, review: 'APPROVED', at: new Date().toISOString() }]);
+                done.push(url);
+              } catch (e) {
+                skipped.push({ url, why: (e as Error).message });
+              }
+            }
+          }
+          return json({ done, skipped });
         }
         if (pathname === '/api/chat') {
           if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/.test(body.url)) return json({ error: 'not a PR URL' }, 400);
@@ -209,7 +244,7 @@ const server = Bun.serve({
         }
       }
       // /pr/<owner>/<repo>/<number> is the in-app PR page; the page reads the rest from the URL.
-      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
+      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
       const file = Bun.file(join(PUBLIC, page));
       if (!file.name!.startsWith(PUBLIC) || !(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);

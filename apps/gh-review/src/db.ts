@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Run } from './actions';
 import type { Imported, MyPR, MyQueue, Queue, ReviewedPR, ReviewPR } from './github';
+import { LANE_COLOR, LANE_NAME, type Lane } from './lane';
 
 export const HOME = process.env.GH_REVIEW_HOME ?? join(homedir(), '.gh-review');
 
@@ -40,6 +41,9 @@ function open(): Database {
     CREATE TABLE IF NOT EXISTS mine (url TEXT PRIMARY KEY, data TEXT NOT NULL, seen_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mine_aside (url TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mine_done (url TEXT PRIMARY KEY, head_sha TEXT NOT NULL, done_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS outcomes (
+      pr_url TEXT NOT NULL, head_sha TEXT NOT NULL, event TEXT NOT NULL, comments INTEGER NOT NULL, at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT, pr_url TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       status TEXT NOT NULL, at TEXT NOT NULL
@@ -297,6 +301,11 @@ export interface ReviewSummary {
   /** Your own color, which wins over the run's. */
   override: string | null;
   reviewId: number;
+  /** The brief's lane, when the newest run had one. */
+  lane: string | null;
+  /** Its one-line intent, and the decisions left for you. */
+  intent: string | null;
+  decisions: string[];
 }
 
 /** Minutes and signal from each PR's newest review that has them, plus your override, so the queue can show them per row. */
@@ -305,7 +314,7 @@ export function reviewSummaries(): Record<string, ReviewSummary> {
   const rows = open()
     .query<Row, []>(
       `SELECT r.pr_url, s.review_id, r.head_sha, s.key, s.output FROM review_steps s JOIN reviews r ON r.id = s.review_id
-       WHERE s.key IN ('guide', 'signal') AND s.status = 'done' ORDER BY s.review_id DESC`,
+       WHERE s.key IN ('guide', 'signal', 'brief') AND s.status = 'done' ORDER BY s.review_id DESC`,
     )
     .all();
   const out: Record<string, ReviewSummary> = {};
@@ -316,12 +325,17 @@ export function reviewSummaries(): Record<string, ReviewSummary> {
     } catch {
       continue;
     }
-    const sum = (out[r.pr_url] ??= { minutes: null, color: null, reason: null, headSha: null, override: null, reviewId: r.review_id });
+    const sum = (out[r.pr_url] ??= { minutes: null, color: null, reason: null, headSha: null, override: null, reviewId: r.review_id, lane: null, intent: null, decisions: [] });
     // Rows come newest first, so only fill from the newest review that answered each one.
     if (r.key === 'guide' && sum.minutes === null && typeof o.minutes === 'number') sum.minutes = o.minutes;
-    if (r.key === 'signal' && sum.color === null && typeof o.color === 'string') Object.assign(sum, { color: o.color, reason: o.reason, headSha: r.head_sha });
+    // A brief sets the color from its lane; runs from before it carry a Signal color instead.
+    if (r.key === 'brief' && sum.lane === null && LANE_COLOR[o.lane as Lane]) {
+      Object.assign(sum, { lane: o.lane, intent: o.intent ?? null, decisions: (o.decisions ?? []).map((d: any) => d.question), headSha: r.head_sha });
+      if (sum.color === null) Object.assign(sum, { color: LANE_COLOR[o.lane as Lane], reason: `${LANE_NAME[o.lane as Lane]}${o.intent ? `: ${o.intent}` : ''}` });
+    }
+    if (r.key === 'signal' && sum.color === null && sum.lane === null && typeof o.color === 'string') Object.assign(sum, { color: o.color, reason: o.reason, headSha: r.head_sha });
   }
-  for (const [url, color] of Object.entries(getOverrides())) (out[url] ??= { minutes: null, color: null, reason: null, headSha: null, override: null, reviewId: 0 }).override = color;
+  for (const [url, color] of Object.entries(getOverrides())) (out[url] ??= { minutes: null, color: null, reason: null, headSha: null, override: null, reviewId: 0, lane: null, intent: null, decisions: [] }).override = color;
   return out;
 }
 
@@ -420,3 +434,65 @@ export function clearChat(prUrl: string) {
     d.run('DELETE FROM chats WHERE pr_url = ?', [prUrl]);
   })();
 }
+
+/** What you did with a PR, recorded when you submit a review from the PR page. */
+export function recordOutcome(prUrl: string, headSha: string, event: string, comments: number, at = new Date().toISOString()) {
+  open().run('INSERT INTO outcomes (pr_url, head_sha, event, comments, at) VALUES (?, ?, ?, ?, ?)', [prUrl, headSha, event, comments, at]);
+}
+
+export type Outcome = 'clean' | 'commented' | 'changes';
+
+export interface Calibrated {
+  url: string;
+  title: string;
+  lane: Lane;
+  /** What the AI first said, when code moved the lane. */
+  aiLane: Lane | null;
+  outcome: Outcome;
+  at: string;
+}
+
+/**
+ * Each PR's newest brief next to what you did with it. Approving with no line comments is clean, a
+ * comment-only review or an approval with line comments is commented, and requesting changes is changes.
+ * Reviews you left on GitHub itself count too, through Done, but only as approved or changes.
+ */
+export function calibration(): Calibrated[] {
+  const d = open();
+  type B = { pr_url: string; output: string };
+  const briefs = d
+    .query<B, []>(`SELECT r.pr_url, s.output FROM review_steps s JOIN reviews r ON r.id = s.review_id WHERE s.key = 'brief' AND s.status = 'done' ORDER BY s.review_id DESC`)
+    .all();
+  const lane = new Map<string, { lane: Lane; aiLane: Lane | null }>();
+  for (const b of briefs) {
+    if (lane.has(b.pr_url)) continue;
+    try {
+      const o = JSON.parse(b.output);
+      if (LANE_COLOR[o.lane as Lane]) lane.set(b.pr_url, { lane: o.lane, aiLane: o.movedFrom ?? null });
+    } catch {}
+  }
+  type O = { pr_url: string; event: string; comments: number; at: string };
+  const mine = new Map<string, O>();
+  for (const o of d.query<O, []>('SELECT pr_url, event, comments, at FROM outcomes ORDER BY at DESC').all()) if (!mine.has(o.pr_url)) mine.set(o.pr_url, o);
+  const out: Calibrated[] = [];
+  for (const entry of listDone()) {
+    const l = lane.get(entry.pr.url);
+    if (!l) continue;
+    const o = mine.get(entry.pr.url);
+    let outcome: Outcome | null = null;
+    if (o) outcome = o.event === 'REQUEST_CHANGES' ? 'changes' : o.event === 'APPROVE' && !o.comments ? 'clean' : 'commented';
+    else if (entry.reason === 'approved') outcome = 'clean';
+    else if (entry.reason === 'changes requested') outcome = 'changes';
+    if (outcome) out.push({ url: entry.pr.url, title: entry.pr.title, lane: l.lane, aiLane: l.aiLane, outcome, at: o?.at ?? entry.doneAt });
+  }
+  // Comment-only reviews never reach Done, so add the ones submitted here.
+  for (const [url, o] of mine) {
+    if (out.some((x) => x.url === url) || !lane.has(url) || o.event !== 'COMMENT') continue;
+    const l = lane.get(url)!;
+    out.push({ url, title: cachedPR(url)?.title ?? url, lane: l.lane, aiLane: l.aiLane, outcome: 'commented', at: o.at });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Whether a lane's call matched what you did: approve wants a clean approval, answer anything but changes, read more than a clean approval, block changes. */
+export const agrees = (lane: Lane, outcome: Outcome) => (lane === 'approve' ? outcome === 'clean' : lane === 'answer' ? outcome !== 'changes' : lane === 'block' ? outcome === 'changes' : outcome !== 'clean');

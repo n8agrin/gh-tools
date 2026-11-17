@@ -4,16 +4,10 @@
   },
   "checks": [
     {
-      "key": "merge",
-      "label": "Merge call",
-      "prompt": "prompts/merge.md",
-      "schema": "prompts/merge.schema.json"
-    },
-    {
-      "key": "help",
-      "label": "Where you can help",
-      "prompt": "prompts/help.md",
-      "schema": "prompts/help.schema.json"
+      "key": "brief",
+      "label": "Brief",
+      "prompt": "prompts/brief.md",
+      "schema": "prompts/brief.schema.json"
     },
     {
       "key": "explain",
@@ -26,19 +20,6 @@
       "label": "Reading guide",
       "prompt": "prompts/guide.md",
       "schema": "prompts/guide.schema.json"
-    },
-    {
-      "key": "description",
-      "label": "Description vs change",
-      "prompt": "prompts/description.md",
-      "schema": "prompts/description.schema.json"
-    },
-    {
-      "key": "signal",
-      "label": "Signal",
-      "prompt": "prompts/signal.md",
-      "schema": "prompts/signal.schema.json",
-      "skipOnMine": true
     },
     {
       "key": "check",
