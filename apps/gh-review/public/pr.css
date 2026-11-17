@@ -664,3 +664,13 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .rstep button.rl:hover { text-decoration: underline; }
 .rstep .rwhy { grid-column: 2 / 5; font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 .rstep.failed .rwhy { color: var(--red); }
+/* Feedback for the author: one list of every AI note, each one click from your review */
+.fbs { display: flex; flex-direction: column; margin-top: 8px; }
+.fb { display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 4px 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+.fb .fk { font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 3px; white-space: nowrap; }
+.fb .fx p { margin: 0; overflow-wrap: anywhere; }
+.fb .fx .why { color: var(--muted); }
+.fb .fl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: 12px; }
+.fb .fl .rates { margin-left: 0; }
+.fb .fa .btn { white-space: nowrap; }
+@media (max-width: 700px) { .fb { grid-template-columns: minmax(0, 1fr); } }

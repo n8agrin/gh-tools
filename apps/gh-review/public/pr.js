@@ -256,14 +256,24 @@ const artLink = (art) => {
   return `<a class="ref-l" href="${safe(art.url)}" target="_blank" rel="noreferrer">${rule ? 'rule' : 'prior art'}: ${esc(art.label.replace(/^(base|rule):\s*/i, ''))}</a>`;
 };
 
+// Short paths like "mutate.server.ts" in the brief's fixes, as the changed file they name.
+const fullPath = (p) => state.pr?.files.find((f) => f.path === p || f.path.endsWith(`/${p}`))?.path ?? p;
+const briefFixes = (steps) =>
+  (doneOutput(steps, 'brief')?.fixes ?? []).flatMap((f) => {
+    const m = String(f.where).match(/^([^:\s]+)(?::(\d+)(?:-(\d+))?)?/);
+    return m ? [{ file: fullPath(m[1]), lines: m[2] ? `${m[2]}${m[3] ? `-${m[3]}` : ''}` : '', kind: 'fix', note: f.fix }] : [];
+  });
+
 function allNotes(steps) {
   return [
+    ...briefFixes(steps),
     ...(doneOutput(steps, 'check')?.findings ?? []).map((f) => ({ ...f, kind: 'finding' })),
     ...(doneOutput(steps, 'guide')?.notes ?? []),
     ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example, lens: q.lens })),
   ];
 }
-const NOTE_WORD = { finding: 'Bug hunt.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
+// Everything the agents wrote is marked AI, and says what kind of note it is.
+const NOTE_WORD = { finding: 'AI · Bug:', check: 'AI · Verify:', 'test-gap': 'AI · Untested:', taste: 'AI · Taste:', fix: 'AI · Fix:' };
 const isCheck = (n) => n.kind === 'check' || n.kind === 'finding';
 
 // The files to read and the routine ones, decided once so the sidebar, the numbers and the map agree.
@@ -360,7 +370,7 @@ function runButtonHtml() {
 }
 
 // Where each step's output shows on the page, and the name the page gives it.
-const STEP_SECTION = { brief: 'lane', check: 'hunt', taste: 'taste', explain: 'explain', guide: 'risk', narrate: 'listen', description: 'description', help: 'help', merge: 'merge' };
+const STEP_SECTION = { brief: 'lane', check: 'feedback', taste: 'taste', explain: 'explain', guide: 'risk', narrate: 'listen', description: 'description', help: 'help', merge: 'merge' };
 const STEP_NAME = { check: 'Bug hunt', guide: 'Reading plan' };
 const STEP_ORDER = ['worktree', 'brief', 'check', 'taste', 'guide', 'explain', 'files', 'narrate'];
 const stepLabel = (s) => (s.label === 'Check' || s.label === 'Reading guide' ? STEP_NAME[s.key] ?? s.label : s.label);
@@ -530,7 +540,7 @@ function sidebar(m) {
   // Each pending comment as one line you can click to jump to it.
   const list = [...state.comments]
     .sort((a, b) => m.order.indexOf(a.path) - m.order.indexOf(b.path) || a.line - b.line)
-    .map((c) => `<button class="cj" type="button" data-jump="${c.id}" title="${esc(c.text)}"><span class="cf">${esc(shortName(c.path))}:${c.line}</span><span class="cx">${esc(c.text.split('\n')[0])}</span></button>`)
+    .map((c) => `<button class="cj" type="button" data-jump="${c.id}" title="${esc(c.text)}"><span class="cf">${esc(shortName(c.path))}:${c.line}</span><span class="cx">${esc(firstLine(c.text))}</span></button>`)
     .join('');
   html += `</nav><div class="subbox">${list ? `<div class="clist">${list}</div>` : ''}<span class="sbt"><span>${n ? plural(n, 'pending comment') : 'No pending comments'}</span>${n ? '<span class="faint">not posted yet</span>' : ''}</span><button class="btn ${n ? 'primary' : ''}" type="button" id="open-submit">Submit review<kbd>⇧S</kbd></button></div>`;
   return html;
@@ -580,7 +590,7 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['guide', 'signal'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], hunt: ['check'] };
+const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['guide', 'signal'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], feedback: ['check', 'taste'] };
 const rerunBtn = (id) => {
   // Only steps your config still has; a retired one (signal, merge) would be dropped by the server anyway.
   const has = (k) => !state.checks || state.checks.some((c) => c.key === k);
@@ -807,20 +817,61 @@ const huntOf = (steps) => {
   const h = doneOutput(steps, 'check');
   return h?.verdict && HUNT[h.verdict] ? h : null;
 };
-function huntSection(steps, r) {
+// Every note the agents wrote, in one list you pick from: bugs first, then fixes, spots to verify and taste.
+// Add to review puts it straight into your pending review on its line; you can edit it there before you submit.
+const FB_ORDER = { finding: 0, fix: 1, check: 2, 'test-gap': 3, taste: 4 };
+function feedbackItems(m) {
+  return m.notes
+    .filter((x) => x.kind in FB_ORDER && x.file)
+    .sort((a, b) => FB_ORDER[a.kind] - FB_ORDER[b.kind] || (a.kind === 'finding' ? (RANK[b.color] ?? 0) - (RANK[a.color] ?? 0) : 0));
+}
+const inReview = (x) => state.comments.find((c) => c.path === x.file && c.from === noteKey(x));
+
+// The changed line nearest the note's own, since a review comment has to sit on a line in the diff.
+function diffLine(path, want) {
+  const ls = (state.diff?.[path]?.hunks ?? []).flatMap((h) => h.lines).filter((l) => l[0] !== '-' && l[2]);
+  if (!ls.length) return null;
+  return ls.reduce((best, l) => (Math.abs(l[2] - want) < Math.abs(best[2] - want) ? l : best), ls[0]);
+}
+
+function addNote(x) {
+  const want = Number(String(x.lines ?? '').split('-')[0]) || 1;
+  const l = diffLine(x.file, want);
+  if (!l) return status(state.diff ? `${shortName(x.file)} has no lines in the diff to comment on` : 'The diff is still loading');
+  state.comments.push({ id: Date.now(), path: x.file, side: 'RIGHT', line: l[2], code: l[3], text: noteText(x, x.file), sha: state.pr.headSha, from: noteKey(x) });
+  saveComments();
+  if (rateSource(x) && !state.ratings[noteKey(x)]) rate(x, 'useful');
+  status(`Added to your pending review on ${shortName(x.file)}:${l[2]}${l[2] !== want ? `, the nearest changed line to ${want}` : ''} · ${plural(state.comments.length, 'pending comment')}`);
+  render();
+}
+
+function feedbackSection(m, steps) {
   const h = huntOf(steps);
-  if (!h) return '';
-  const [word, tone] = HUNT[h.verdict];
-  const where = (f) => `<button class="link" type="button" data-go="${esc(f.file)}">${esc(shortName(f.file))}:${esc(String(f.lines).split('-')[0])}</button>`;
-  let body = `<p class="mwhy">${t(h.verdict_why)}${h.verdict_moved ? ` <span class="faint">Was dangerous; came down because ${esc(h.verdict_moved)}.</span>` : ''}</p>`;
-  const fs = [...h.findings].sort((a, b) => (RANK[b.color] ?? 0) - (RANK[a.color] ?? 0));
-  if (fs.length) body += `<ul class="hunt">${fs.map((f) => `<li><span class="c-${f.color === 'red' ? 'red' : 'yellow'}">●</span> <b>${esc(f.category[0].toUpperCase() + f.category.slice(1))}.</b> ${t(f.note)} ${where(f)}${f.downgraded ? ` <span class="faint">Was red: ${t(f.downgraded)}</span>` : ''}</li>`).join('')}</ul>`;
-  else body += `<p class="faint">No findings. Each one sits on its file too.</p>`;
+  const items = feedbackItems(m);
+  const pending = !h && pendingBody(steps.check);
+  if (!items.length && !h && !pending) return '';
+  const added = items.filter(inReview).length;
+  const rows = items
+    .map((x, i) => {
+      const done = inReview(x);
+      const btn = done
+        ? `<button class="link nadd" type="button" data-jump="${done.id}" title="Open it in your pending review">In your review ✓</button>`
+        : `<button class="btn" type="button" data-fb="${i}" title="Adds it to your pending review on its line, marked Generated by AI">Add to review</button>`;
+      const tone = x.kind === 'finding' ? (x.color === 'red' ? 'c-red' : 'c-yellow') : '';
+      return `<div class="fb"><span class="fk ${tone}">${esc(NOTE_WORD[x.kind].replace(/:$/, ''))}</span><div class="fx"><p>${t(x.note)}${x.scenario ? ` <span class="why">${t(x.scenario)}</span>` : ''}</p><span class="fl">${whereLink(`${x.file}${x.lines ? `:${x.lines}` : ''}`, m.r?.headSha)}${rateBtns(x)}</span></div><span class="fa">${btn}</span></div>`;
+    })
+    .join('');
+  let body = '';
+  if (h) body += `<p class="mwhy"><b>Bug hunt:</b> ${t(h.verdict_why)}${h.verdict_moved ? ` <span class="faint">Was dangerous; came down because ${esc(h.verdict_moved)}.</span>` : ''}</p>`;
+  if (pending) body += pending;
+  body += rows ? `<div class="fbs">${rows}</div>` : '<p class="faint">Nothing to send the author.</p>';
   const extra = [];
-  if (h.already_said?.length) extra.push(`<details><summary>Already raised on the PR, so left out (${h.already_said.length})</summary><ul>${h.already_said.map((x) => `<li>${t(x)}</li>`).join('')}</ul></details>`);
-  if (h.dropped?.length) extra.push(`<details><summary>Dropped by the skeptic (${h.dropped.length})</summary><ul>${h.dropped.map((x) => `<li>${t(x.note)} <span class="faint">${esc(shortName(x.file))}:${esc(String(x.lines).split('-')[0])} · ${t(x.reason)}</span></li>`).join('')}</ul></details>`);
-  if (h.verify_error) extra.push(`<p class="faint">The skeptic didn't run: ${esc(h.verify_error)}</p>`);
-  return bsec('hunt', 'Bug hunt', `<div class="huntb">${body}${extra.join('')}</div>`, `<span class="sig c-${tone}"><i></i>${esc(word)}</span>`);
+  if (h?.already_said?.length) extra.push(`<details><summary>Already raised on the PR, so left out (${h.already_said.length})</summary><ul>${h.already_said.map((x) => `<li>${t(x)}</li>`).join('')}</ul></details>`);
+  if (h?.dropped?.length) extra.push(`<details><summary>Dropped by the skeptic (${h.dropped.length})</summary><ul>${h.dropped.map((x) => `<li>${t(x.note)} <span class="faint">${esc(shortName(x.file))}:${esc(String(x.lines).split('-')[0])} · ${t(x.reason)}</span></li>`).join('')}</ul></details>`);
+  if (h?.verify_error) extra.push(`<p class="faint">The skeptic didn't run: ${esc(h.verify_error)}</p>`);
+  const [word, tone] = h ? HUNT[h.verdict] : [];
+  const head = `${h ? `<span class="sig c-${tone}"><i></i>${esc(word)}</span>` : ''}<span class="sub">${plural(items.length, 'note')}${added ? ` · ${added} in your review` : ''}</span>`;
+  return bsec('feedback', 'Feedback for the author', `<div class="huntb">${body}${extra.join('')}</div>`, head);
 }
 
 function brief(m) {
@@ -860,7 +911,7 @@ function brief(m) {
     help = bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
   } else if (legacy && steps.help && steps.help.status !== 'skipped') help = bsec('help', 'Where you can help', stepBody(steps.help));
 
-  const hunt = huntSection(steps, r) || (pendingBody(steps.check) ? bsec('hunt', 'Bug hunt', pendingBody(steps.check)) : '');
+  const hunt = feedbackSection(m, steps);
 
   const talk = conversation();
   const convo = talk ? bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`) : '';
@@ -1187,7 +1238,11 @@ function openDraft(path, side, line, code, text = '', editId = null, from = null
 // ——— Callouts into your review ———
 
 // What a callout becomes as a line comment: the note, the failure it describes, and the prior art it cites.
-const noteText = (x, path) => [x.note, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+// It opens with Generated by AI, then says what kind of note it is: Verify: for a spot to check, Untested: for a behavior no test covers, Taste: for a question, Fix: for a suggested change; a bug is just the bug.
+const AI_HEAD = '**Generated by AI**';
+const NOTE_PREFIX = { check: 'Verify: ', 'test-gap': 'Untested: ', taste: 'Taste: ', fix: 'Fix: ', finding: '' };
+const noteText = (x, path) => [AI_HEAD, `${NOTE_PREFIX[x.kind] ?? ''}${x.note}`, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+const firstLine = (text) => text.replace(/^\*\*Generated by AI\*\*\s*/, 'AI: ').split('\n')[0];
 const noteKey = (x) => `${x.kind}:${x.note}`;
 const fromNote = (path, line, key) => state.comments.find((c) => c.path === path && c.line === line && c.from === key);
 
@@ -1947,7 +2002,7 @@ $('#page').addEventListener('click', (e) => {
   if (id === 'run') return runReview();
   const decide = e.target.closest('[data-decide]');
   if (decide) return decideFromBrief(decide.dataset.decide, Number(decide.dataset.i));
-  const shape = e.target.closest('.shape[data-go], .huntb [data-go]');
+  const shape = e.target.closest('.shape[data-go]');
   if (shape) return open(shape.dataset.go);
   if (id === 'narr-write') return writeNarration();
   const play = e.target.closest('.narr-play');
@@ -1994,6 +2049,8 @@ $('#page').addEventListener('click', (e) => {
   }
   const nadd = e.target.closest('[data-note-text]');
   if (nadd) return draftFromNote(nadd);
+  const fb = e.target.closest('[data-fb]');
+  if (fb) return addNote(feedbackItems(model())[Number(fb.dataset.fb)]);
   const nj = e.target.closest('.nadd[data-jump]');
   if (nj) return jumpToComment(Number(nj.dataset.jump));
   const cmt = e.target.closest('.cmt');
