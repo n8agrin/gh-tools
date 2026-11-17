@@ -845,33 +845,91 @@ function addNote(x) {
   render();
 }
 
+// Each kind of note gets its own group, in FB_ORDER, with a line on where it came from.
+const FB_GROUP = {
+  finding: ['Bugs', 'from the bug hunt, checked by the skeptic'],
+  fix: ['Fixes', 'worth making before merge, from the brief'],
+  check: ['Verify', 'spots the reading guide wants a person to check'],
+  'test-gap': ['Untested', 'behavior no test covers'],
+  taste: ['Taste', 'duplicate code and simpler ways to write it'],
+};
+const FB_CHIP = { finding: 'Bug', fix: 'Fix', check: 'Verify', 'test-gap': 'Untested', taste: 'Taste' };
+const lineOf = (x) => Number(String(x.lines ?? '').split('-')[0]) || 1;
+// Names a note is about: camelCase or snake_case identifiers and `code` spans, which tell one issue from another.
+const namesIn = (x) => new Set([...(x.note ?? '').matchAll(/`([^`]+)`|\b([a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g)].map((g) => g[1] ?? g[2]));
+// Notes about the same issue as a bug: they name the same identifier, or sit within 15 lines of it in the same file.
+function sameIssue(items) {
+  const of = new Map();
+  for (const bug of items.filter((x) => x.kind === 'finding')) {
+    const names = namesIn(bug);
+    const near = items.filter((x) => x !== bug && x.kind !== 'finding' && !of.has(x) && ((x.file === bug.file && Math.abs(lineOf(x) - lineOf(bug)) <= 15) || [...namesIn(x)].some((n) => names.has(n))));
+    if (!near.length) continue;
+    const group = { bug, notes: [bug, ...near], name: [...names][0] ?? shortName(bug.file) };
+    for (const x of group.notes) of.set(x, group);
+  }
+  return of;
+}
+const fbHide = () => !!localStorage.getItem('fbHide');
+
 function feedbackSection(m, steps) {
   const h = huntOf(steps);
   const items = feedbackItems(m);
   const pending = !h && pendingBody(steps.check);
   if (!items.length && !h && !pending) return '';
   const added = items.filter(inReview).length;
-  const rows = items
-    .map((x, i) => {
-      const done = inReview(x);
-      const btn = done
-        ? `<button class="link nadd" type="button" data-jump="${done.id}" title="Open it in your pending review">In your review ✓</button>`
-        : `<button class="btn" type="button" data-fb="${i}" title="Adds it to your pending review on its line, marked as an AI finding you triaged">Add to review</button>`;
-      const tone = x.kind === 'finding' ? (x.color === 'red' ? 'c-red' : 'c-yellow') : '';
-      return `<div class="fb"><span class="fk ${tone}">${esc(NOTE_WORD[x.kind].replace(/:$/, ''))}</span><div class="fx"><p>${t(x.note)}${x.scenario ? ` <span class="why">${t(x.scenario)}</span>` : ''}</p><span class="fl">${whereLink(`${x.file}${x.lines ? `:${x.lines}` : ''}`, m.r?.headSha)}${rateBtns(x)}</span></div><span class="fa">${btn}</span></div>`;
+  const issues = sameIssue(items);
+  const kinds = Object.keys(FB_ORDER).filter((k) => items.some((x) => x.kind === k));
+  if (state.fbKind && !kinds.includes(state.fbKind)) state.fbKind = null;
+  const hide = fbHide();
+  const row = (x) => {
+    const i = items.indexOf(x);
+    const done = inReview(x);
+    if (done && hide) return '';
+    const btn = done
+      ? `<button class="link nadd" type="button" data-jump="${done.id}" title="Open it in your pending review">In your review ✓</button>`
+      : `<button class="btn" type="button" data-fb="${i}" title="Adds it to your pending review on its line, marked as an AI finding you triaged">Add to review</button>`;
+    const g = issues.get(x);
+    let chip = '';
+    if (g && g.bug === x) {
+      const counts = Object.keys(FB_CHIP).filter((k) => k !== 'finding').map((k) => [k, g.notes.filter((n) => n.kind === k).length]).filter(([, n]) => n);
+      chip = `<span class="fsame" title="Other notes about the same issue">Same issue: ${counts.map(([k, n]) => `${FB_CHIP[k]} ${n}`).join(' · ')}</span>`;
+    } else if (g) chip = `<span class="fsame" title="${esc(g.bug.note)}">Same issue as the bug</span>`;
+    // Where the comment will land, when the note's own line isn't in the diff.
+    const l = state.diff && diffLine(x.file, lineOf(x));
+    const place = !done && l && l[2] !== lineOf(x) ? `<span class="fplace">Goes on line ${l[2]}, the nearest changed line</span>` : '';
+    const tone = x.kind === 'finding' && x.color === 'red' ? ' red' : '';
+    return `<div class="fb${done ? ' added' : ''}"><span class="fk k-${x.kind}${tone}">AI · ${FB_CHIP[x.kind]}</span><div class="fx"><p>${t(x.note)}</p>${x.scenario ? `<p class="why">${t(x.scenario)}</p>` : ''}<span class="fl">${whereLink(`${x.file}${x.lines ? `:${x.lines}` : ''}`, m.r?.headSha)}${chip}${rateBtns(x)}</span></div><span class="fa">${btn}${place}</span></div>`;
+  };
+  const groups = kinds
+    .filter((k) => !state.fbKind || state.fbKind === k)
+    .map((k) => {
+      const rows = items.filter((x) => x.kind === k).map(row).join('');
+      const [title, sub] = FB_GROUP[k];
+      return rows ? `<div class="fgroup"><div class="fgh"><h3 class="k-${k}">${title}</h3><span class="faint">${sub}</span></div>${rows}</div>` : '';
     })
     .join('');
   let body = '';
   if (h) body += `<p class="mwhy"><b>Bug hunt:</b> ${t(h.verdict_why)}${h.verdict_moved ? ` <span class="faint">Was dangerous; came down because ${esc(h.verdict_moved)}.</span>` : ''}</p>`;
   if (pending) body += pending;
-  body += rows ? `<div class="fbs">${rows}</div>` : '<p class="faint">Nothing to send the author.</p>';
+  if (items.length) {
+    const chip = (k, label, n) => `<button type="button" class="fchip${(state.fbKind ?? null) === k ? ' on' : ''}${k ? ` k-${k}` : ''}" data-fb-kind="${k ?? ''}" aria-pressed="${(state.fbKind ?? null) === k}">${label} ${n}</button>`;
+    body += `<div class="fbar"><div class="fchips" role="group" aria-label="Show notes of one kind">${chip(null, 'All', items.length)}${kinds.map((k) => chip(k, FB_CHIP[k], items.filter((x) => x.kind === k).length)).join('')}</div><label class="fhide"><input type="checkbox" id="fb-hide" ${hide ? 'checked' : ''}>Hide what's in your review</label></div>`;
+  }
+  body += groups ? `<div class="fbs">${groups}</div>` : items.length ? `<p class="faint">${hide && added ? 'Everything here is in your review.' : 'Nothing of this kind.'}</p>` : '<p class="faint">Nothing to send the author.</p>';
   const extra = [];
   if (h?.already_said?.length) extra.push(`<details><summary>Already raised on the PR, so left out (${h.already_said.length})</summary><ul>${h.already_said.map((x) => `<li>${t(x)}</li>`).join('')}</ul></details>`);
   if (h?.dropped?.length) extra.push(`<details><summary>Dropped by the skeptic (${h.dropped.length})</summary><ul>${h.dropped.map((x) => `<li>${t(x.note)} <span class="faint">${esc(shortName(x.file))}:${esc(String(x.lines).split('-')[0])} · ${t(x.reason)}</span></li>`).join('')}</ul></details>`);
   if (h?.verify_error) extra.push(`<p class="faint">The skeptic didn't run: ${esc(h.verify_error)}</p>`);
+  // Adds every note about the biggest issue that isn't in the review yet, in one click.
+  const big = [...new Set(issues.values())].map((g) => ({ ...g, left: g.notes.filter((x) => !inReview(x) && (!state.diff || diffLine(x.file, lineOf(x)))) })).filter((g) => g.left.length > 1).sort((a, b) => b.left.length - a.left.length)[0];
+  const n = state.comments.length;
+  const foot = items.length
+    ? `<div class="fbfoot"><span><b>${plural(n, 'comment')} in your review</b> <span class="faint">· each opens with ${esc(aiHead().replace(/\*\*/g, ''))}, and you can edit it before you submit</span></span><span class="fbacts">${big ? `<button class="btn" type="button" data-fb-all="${items.indexOf(big.bug)}">Add all ${big.left.length} about ${esc(big.name)}</button>` : ''}<button class="btn ${n ? 'primary' : ''}" type="button" data-open-submit>Submit review<kbd>⇧S</kbd></button></span></div>`
+    : '';
   const [word, tone] = h ? HUNT[h.verdict] : [];
-  const head = `${h ? `<span class="sig c-${tone}"><i></i>${esc(word)}</span>` : ''}<span class="sub">${plural(items.length, 'note')}${added ? ` · ${added} in your review` : ''}</span>`;
-  return bsec('feedback', 'Feedback for the author', `<div class="huntb">${body}${extra.join('')}</div>`, head);
+  const same = [...new Set(issues.values())].reduce((a, g) => a + g.notes.length, 0);
+  const head = `${h ? `<span class="sig c-${tone}"><i></i>${esc(word)}</span>` : ''}<span class="sub">${plural(items.length, 'note')}${same ? ` · ${same} about the same issue` : ''}${added ? ` · ${added} in your review` : ''}</span>`;
+  return bsec('feedback', 'Feedback for the author', `<div class="huntb">${body}${extra.join('')}${foot}</div>`, head);
 }
 
 function brief(m) {
@@ -1989,7 +2047,7 @@ drawFont();
 
 $('#side').addEventListener('click', (e) => {
   if (e.target.id === 'show-routine') return (state.showRoutine = true), render();
-  if (e.target.closest('#open-submit')) return openSubmit();
+  if (e.target.closest('#open-submit, [data-open-submit]')) return openSubmit();
   const jump = e.target.closest('[data-jump]');
   if (jump) return jumpToComment(Number(jump.dataset.jump));
   const box = e.target.closest('[data-tick]');
@@ -2052,6 +2110,14 @@ $('#page').addEventListener('click', (e) => {
   if (nadd) return draftFromNote(nadd);
   const fb = e.target.closest('[data-fb]');
   if (fb) return addNote(feedbackItems(model())[Number(fb.dataset.fb)]);
+  const fk = e.target.closest('[data-fb-kind]');
+  if (fk) return (state.fbKind = fk.dataset.fbKind || null), render();
+  const fa = e.target.closest('[data-fb-all]');
+  if (fa) {
+    const items = feedbackItems(model());
+    const g = sameIssue(items).get(items[Number(fa.dataset.fbAll)]);
+    return g?.notes.filter((x) => !inReview(x) && diffLine(x.file, lineOf(x))).forEach((x) => addNote(x));
+  }
   const nj = e.target.closest('.nadd[data-jump]');
   if (nj) return jumpToComment(Number(nj.dataset.jump));
   const cmt = e.target.closest('.cmt');
@@ -2142,6 +2208,12 @@ $('#rundrawer').addEventListener('click', (e) => {
 });
 $('#rundrawer').addEventListener('change', (e) => {
   if (e.target.dataset.extra) (e.target.checked ? state.extras.add(e.target.dataset.extra) : state.extras.delete(e.target.dataset.extra)), drawRun();
+  if (e.target.id === 'fb-hide') {
+    try {
+      localStorage.setItem('fbHide', e.target.checked ? '1' : '');
+    } catch {}
+    return render();
+  }
   if (e.target.id === 'pick') (state.shown = Number(e.target.value)), render();
 });
 
