@@ -71,3 +71,20 @@ test('your PRs that need you come closest-to-landing first; the rest are counts'
   expect(move[3]).toMatchObject({ next: 'findings', findings: 2, mine: true });
   expect(t.counts).toEqual({ waiting: 1, hunt: 1, hidden: 1 });
 });
+
+test('mentions come oldest first, and a mention on a PR already above gets no second row', async () => {
+  const { toMention } = await import('../src/github');
+  const raw = await Bun.file(`${import.meta.dir}/notifications.json`).json();
+  const mentions = raw.map(toMention).filter(Boolean);
+  // CI and review requests are left out; a release links to its repo.
+  expect(mentions.map((m: any) => m.id)).toEqual(['101', '102', '105']);
+  expect(mentions[0].url).toBe('https://github.com/acme/app/pull/63120');
+  expect(mentions[1].url).toBe('https://github.com/acme/app/issues/63140');
+  expect(mentions[2].url).toBe('https://github.com/acme/docs');
+
+  const queue = [pr(63120, { url: 'https://github.com/acme/app/pull/63120', repo: 'acme/app' })];
+  const rows = buildToday(input({ queue, mentions })).bands[2].rows;
+  expect(rows.map((r) => r.thread)).toEqual(['105', '102']);
+  expect(rows[0]).toMatchObject({ number: null, tag: 'MENTION', next: 'thread', why: 'A team of yours was @-mentioned.' });
+  expect(rows[1]).toMatchObject({ number: 63140, why: "New comments on a thread you're in." });
+});

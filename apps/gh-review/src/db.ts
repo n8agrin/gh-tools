@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Run } from './actions';
-import type { Imported, MyPR, MyQueue, Queue, ReviewedPR, ReviewPR } from './github';
+import type { Imported, Mention, MyPR, MyQueue, Queue, ReviewedPR, ReviewPR } from './github';
 import { LANE_COLOR, LANE_NAME, type Lane } from './lane';
 
 export const HOME = process.env.GH_REVIEW_HOME ?? join(homedir(), '.gh-review');
@@ -117,6 +117,16 @@ export function cachedMine(): MyQueue | null {
   if (!meta.mineFetchedAt) return null;
   const prs = d.query<{ data: string }, []>('SELECT data FROM mine').all().map((r) => JSON.parse(r.data) as MyPR);
   return { viewer: meta.viewer ?? '', fetchedAt: meta.mineFetchedAt, prs };
+}
+
+/** The last good list of mentions and replies, so Today draws before GitHub answers. */
+export function saveMentions(list: Mention[]) {
+  open().run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['mentions', JSON.stringify(list)]);
+}
+
+export function cachedMentions(): Mention[] {
+  const v = open().query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'mentions'").get()?.value;
+  return v ? (JSON.parse(v) as Mention[]) : [];
 }
 
 /** Your GitHub login as of the last fetch of either list, or null before the first one. */

@@ -1,0 +1,7 @@
+[
+  { "id": "101", "reason": "mention", "updated_at": "2026-11-15T09:00:00Z", "repository": { "full_name": "acme/app", "html_url": "https://github.com/acme/app" }, "subject": { "title": "Cache key for workbook query results", "type": "PullRequest", "url": "https://api.github.com/repos/acme/app/pulls/63120" } },
+  { "id": "102", "reason": "comment", "updated_at": "2026-11-16T09:00:00Z", "repository": { "full_name": "acme/app", "html_url": "https://github.com/acme/app" }, "subject": { "title": "CSV upload rejects files with a byte order mark", "type": "Issue", "url": "https://api.github.com/repos/acme/app/issues/63140" } },
+  { "id": "103", "reason": "ci_activity", "updated_at": "2026-11-16T10:00:00Z", "repository": { "full_name": "acme/app", "html_url": "https://github.com/acme/app" }, "subject": { "title": "CI failed", "type": "CheckSuite", "url": null } },
+  { "id": "104", "reason": "review_requested", "updated_at": "2026-11-16T11:00:00Z", "repository": { "full_name": "acme/app", "html_url": "https://github.com/acme/app" }, "subject": { "title": "Bump vitest", "type": "PullRequest", "url": "https://api.github.com/repos/acme/app/pulls/63910" } },
+  { "id": "105", "reason": "team_mention", "updated_at": "2026-11-14T11:00:00Z", "repository": { "full_name": "acme/docs", "html_url": "https://github.com/acme/docs" }, "subject": { "title": "v2.3 release notes", "type": "Release", "url": "https://api.github.com/repos/acme/docs/releases/9" } }
+]
