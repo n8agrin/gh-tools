@@ -53,6 +53,14 @@ export interface Session {
   ttl?: number;
 }
 
+/** The one checkout where Run locally puts a PR, and the command that serves it. */
+export interface Local {
+  /** A clone kept for this, apart from the one you work in, like "~/src/repo-local". */
+  dir: string;
+  /** Started in `dir` after the checkout, left running until the slot moves, like ["bin/dev"]. */
+  start: string[];
+}
+
 export interface Config {
   /** Where your clone of each repo lives, like {"owner/repo": "~/src/repo"}. Reviews and chats check out worktrees from it. */
   checkouts: Record<string, string>;
@@ -71,6 +79,8 @@ export interface Config {
   actions?: Action[];
   /** Test boxes per repo, like {"owner/repo": {"label": "preview", ...}}. Adds Test on Depot to Today. */
   sessions?: Record<string, Session>;
+  /** Run locally per repo, like {"owner/repo": {"dir": "~/src/repo-local", "start": ["bin/dev"]}}. One PR at a time. */
+  local?: Record<string, Local>;
 }
 
 export const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());

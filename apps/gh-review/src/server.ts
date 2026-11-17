@@ -10,6 +10,7 @@ import { CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from 
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
+import { localSlot, releaseSlot, slotBlockers, takeSlot } from './local';
 import { openCommand, sessionState, startTunnel, stopTunnel, tunnelRunning } from './session';
 
 const PORT = Number(process.env.PORT ?? 4790);
@@ -139,10 +140,10 @@ const server = Bun.serve({
         const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
         const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
         // Notifications failing (say, a gh login without the notifications scope) shouldn't make the PRs look stale.
-        const { sessions = {} } = await loadConfig();
+        const { sessions = {}, local = {} } = await loadConfig();
         // Which repos get Test on Depot buttons, by the name and label your config gives them.
         const boxes = Object.fromEntries(Object.entries(sessions).map(([repo, c]) => [repo, { name: c.name ?? null, label: c.label }]));
-        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, sessions: boxes });
+        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, sessions: boxes, local: { repos: Object.keys(local), slot: localSlot() } });
       }
       if (pathname === '/api/session') {
         const url = new URL(req.url).searchParams.get('url') ?? '';
@@ -224,6 +225,21 @@ const server = Bun.serve({
             if (info.appUrl && /^https?:\/\//.test(info.appUrl)) await openInBrowser(info.appUrl);
           } else return json({ error: 'unknown session action' }, 400);
           return json(await sessionInfo(url));
+        }
+        if (pathname === '/api/local') {
+          // Run locally: one PR at a time in the clone your config names. Only after a click on Today.
+          if (body.do === 'release') return releaseSlot(), json({ slot: null });
+          const m = String(body.url ?? '').match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
+          const cfg = m && (await loadConfig()).local?.[m[1]];
+          if (!m || !cfg) return json({ error: 'Run locally is not set up for this repo. Add it under "local" in your config.' }, 400);
+          const { holder } = await slotBlockers(body.url, cfg);
+          // Moving the slot stops another PR's server, so the page asks first.
+          if (holder && !body.confirmed) return json({ confirm: `Move the local slot from ${holder.repo}#${holder.number}? Its server will stop.` });
+          try {
+            return json({ slot: { ...(await takeSlot({ url: body.url, repo: m[1], number: Number(m[2]) }, cfg)), running: true } });
+          } catch (e) {
+            return json({ error: (e as Error).message }, 400);
+          }
         }
         if (pathname === '/api/mentions/read') {
           // Marks a notification read on GitHub, only after you open it or set it aside on Today.

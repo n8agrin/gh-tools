@@ -119,6 +119,17 @@ export function cachedMine(): MyQueue | null {
   return { viewer: meta.viewer ?? '', fetchedAt: meta.mineFetchedAt, prs };
 }
 
+/** One value in the meta table, or null. */
+export function getMeta(key: string): string | null {
+  return open().query<{ value: string }, [string]>('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
+}
+
+/** Sets one value in the meta table; null removes it. */
+export function setMeta(key: string, value: string | null) {
+  if (value === null) open().run('DELETE FROM meta WHERE key = ?', [key]);
+  else open().run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [key, value]);
+}
+
 /** The last good list of mentions and replies, so Today draws before GitHub answers. */
 export function saveMentions(list: Mention[]) {
   open().run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['mentions', JSON.stringify(list)]);
