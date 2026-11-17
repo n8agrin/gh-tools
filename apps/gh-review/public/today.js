@@ -244,7 +244,7 @@ function openPage(r = current()) {
   if (!r || r.thread || isIssue(r)) return;
   sessionStorage.setItem('todaySelected', r.key);
   sessionStorage.setItem('order', JSON.stringify(rows().map((x) => x.url)));
-  sessionStorage.setItem('back', '/today');
+  sessionStorage.setItem('back', '/');
   location.href = `/pr/${r.repo}/${r.number}`;
 }
 
@@ -379,7 +379,7 @@ document.addEventListener('keydown', (e) => {
     o: () => openGitHub(),
     x: () => setAside(),
     r: () => load(),
-    q: () => (location.href = '/'),
+    q: () => (location.href = '/queue'),
     m: () => (location.href = '/mine'),
     b: () => (location.href = '/board'),
     t: () => setTheme(state.theme === 'dark' ? 'light' : 'dark'),

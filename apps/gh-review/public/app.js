@@ -591,7 +591,7 @@ function openPage(p = current()) {
   sessionStorage.setItem('selected', p.url);
   // The PR page walks this list with j/k, so it matches what you see here.
   sessionStorage.setItem('order', JSON.stringify(visible().all.map((x) => x.url)));
-  sessionStorage.setItem('back', '/');
+  sessionStorage.setItem('back', '/queue');
   location.href = pagePath(p);
 }
 

@@ -64,11 +64,11 @@ addEventListener('pagehide', () => player.stop());
 
 // Back goes to Today when that's where you came from. Otherwise your own PRs come back to My PRs instead
 // of the review queue, or to the board when that's where you came from.
-const BACK_NAMES = { '/today': 'Today', '/board': 'Board', '/mine': 'My PRs' };
+const BACK_NAMES = { '/': 'Today', '/board': 'Board', '/mine': 'My PRs' };
 const home = () => {
   const back = sessionStorage.getItem('back');
-  if (back === '/today') return '/today';
-  return state.pr?.mine ? (back === '/board' ? '/board' : '/mine') : '/';
+  if (back === '/' || back === '/today') return '/';
+  return state.pr?.mine ? (back === '/board' ? '/board' : '/mine') : '/queue';
 };
 
 $('#ref').textContent = `${name}#${number}`;

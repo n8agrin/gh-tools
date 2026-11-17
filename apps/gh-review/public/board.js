@@ -386,7 +386,7 @@ document.addEventListener('keydown', (e) => {
     u: () => undo(),
     r: () => load(),
     v: () => (location.href = '/mine'),
-    q: () => (location.href = '/'),
+    q: () => (location.href = '/queue'),
     t: () => setTheme(state.theme === 'dark' ? 'light' : 'dark'),
     Escape: () => state.filter && ((search.value = ''), (state.filter = ''), render()),
     '/': () => search.focus(),
