@@ -11,6 +11,8 @@ const state = {
   sessions: {},
   /** Each PR's box as last read: {url: {state, appUrl, endsAt, tunnel, at}}. */
   boxes: {},
+  /** Run locally: repos it's set up for, and who holds the one slot. */
+  local: { repos: [], slot: null },
   loading: true,
   selected: sessionStorage.getItem('todaySelected'),
   status: '',
@@ -71,9 +73,21 @@ function boxButtons(r) {
   return `<button class="btn" type="button" data-do="box-start">${esc(boxName(cfg))} <kbd>D</kbd></button>${b.state === 'ended' ? '<span class="since">last box ended</span>' : ''}`;
 }
 
+/** Run locally: one slot. This PR has it, another has it, or it's free. */
+function localButtons(r) {
+  if (r.thread || !state.local.repos.includes(r.repo)) return '';
+  const s = state.local.slot;
+  if (s?.url === r.url && s.running) {
+    const since = new Date(s.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `<button class="btn" type="button" aria-pressed="true" disabled>Running locally <span class="mono">since ${esc(since)}</span></button><button class="btn" type="button" data-do="local-release">Release slot</button>`;
+  }
+  if (s?.running) return `<button class="btn" type="button" data-do="local-take">Switch slot from ${esc(s.repo.split('/')[1])}#${s.number} <kbd>L</kbd></button>`;
+  return `<button class="btn" type="button" data-do="local-take">Run locally <kbd>L</kbd></button>`;
+}
+
 function extras(r) {
   if (r.thread) return '<button class="btn" type="button" data-do="aside">Mark read <kbd>x</kbd></button>';
-  const out = [boxButtons(r)];
+  const out = [boxButtons(r), localButtons(r)];
   if (!['brief', 'findings'].includes(r.next)) out.push('<button class="btn" type="button" data-do="page">PR page <kbd>p</kbd></button>');
   if (!['merge', 'undraft', 'unblock'].includes(r.next)) out.push('<button class="btn" type="button" data-do="github">GitHub <kbd>o</kbd></button>');
   out.push('<button class="btn" type="button" data-do="aside">Set aside <kbd>x</kbd></button>');
@@ -127,6 +141,7 @@ const KEYS = [
   [['↵'], "The row's main button"],
   [['A'], 'Approve, when the brief cleared it on this commit (asks first)'],
   [['D'], 'Start the test box, or open it once it is up (when your config has one for the repo)'],
+  [['L'], 'Run the PR locally in the one local slot (asks before moving it from another PR)'],
   [['p'], 'Open the PR page'],
   [['o'], 'Open the PR on GitHub'],
   [['x'], 'Set the row aside until the PR changes, or mark a mention read'],
@@ -157,7 +172,8 @@ function render() {
   const boxes = new Set(rows().filter((r) => boxCfg(r) && r.labels.includes(boxCfg(r).label)).map((r) => r.url)).size;
   $('#needs').innerHTML =
     state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', mentions: 'mentions' })[b.key] ?? b.key)}</span>`).join('') +
-    (boxes ? `<span title="PRs with a test box label on"><b>${boxes}</b>${boxes === 1 ? 'box' : 'boxes'} up</span>` : '');
+    (boxes ? `<span title="PRs with a test box label on"><b>${boxes}</b>${boxes === 1 ? 'box' : 'boxes'} up</span>` : '') +
+    (state.local.slot?.running ? `<span title="The PR in the local slot">Local <b>${esc(state.local.slot.repo.split('/')[1])}#${state.local.slot.number}</b></span>` : '');
   const when = state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   const stale = state.error && n;
   $('#fetched').textContent = state.loading ? 'Refreshing…' : stale ? `Couldn't refresh, showing ${when}` : when ? `Updated ${when}` : '';
@@ -175,7 +191,7 @@ function render() {
 }
 
 // A PR can sit in two bands (you review it and it's yours), so a row is keyed by its band too.
-const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null, sessions: res.sessions ?? state.sessions });
+const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null, sessions: res.sessions ?? state.sessions, local: res.local ?? state.local });
 
 async function load() {
   state.loading = true;
@@ -286,6 +302,22 @@ async function box(action, r = current()) {
   say({ start: `Added the ${cfg.label} label to ${ref(r)}. The box takes a few minutes to boot.`, stop: `Removed the ${cfg.label} label from ${ref(r)}.`, open: `Opened the box for ${ref(r)}.` }[action]);
 }
 
+async function local(action, r = current()) {
+  if (!r || r.thread || !state.local.repos.includes(r.repo)) return;
+  if (action === 'take' && state.local.slot?.url === r.url && state.local.slot.running) return say(`${ref(r)} already has the local slot.`);
+  if (action === 'release' && !confirm(`Stop the local server for ${ref(r)} and free the slot?`)) return;
+  say(action === 'take' ? `Checking out ${ref(r)} locally…` : 'Freeing the local slot…');
+  let res = await post('/api/local', { url: r.url, do: action });
+  if (res.confirm) {
+    if (!confirm(res.confirm)) return say('Left the local slot where it was.');
+    say(`Checking out ${ref(r)} locally…`);
+    res = await post('/api/local', { url: r.url, do: action, confirmed: true });
+  }
+  if (res.error) return say(res.error);
+  state.local.slot = res.slot;
+  say(res.slot ? `${ref(r)} is running locally. Its log is ${res.slot.log}` : 'Freed the local slot.');
+}
+
 function primary(r = current()) {
   if (!r) return;
   (PRIMARY[r.next] ?? PRIMARY.unblock)[2](r);
@@ -314,6 +346,7 @@ document.addEventListener('keydown', (e) => {
     Enter: () => primary(),
     A: () => approve(),
     D: () => box('key'),
+    L: () => local('take'),
     p: () => openPage(),
     o: () => openGitHub(),
     x: () => setAside(),
@@ -336,7 +369,7 @@ $('#today').addEventListener('click', (e) => {
   state.selected = r.key;
   const b = e.target.closest('[data-do]');
   if (!b) return render();
-  ({ primary: () => primary(r), page: () => openPage(r), github: () => openGitHub(r), aside: () => setAside(r), 'box-start': () => box('start', r), 'box-stop': () => box('stop', r), 'box-open': () => box('open', r) })[b.dataset.do]?.();
+  ({ primary: () => primary(r), page: () => openPage(r), github: () => openGitHub(r), aside: () => setAside(r), 'box-start': () => box('start', r), 'box-stop': () => box('stop', r), 'box-open': () => box('open', r), 'local-take': () => local('take', r), 'local-release': () => local('release', r) })[b.dataset.do]?.();
 });
 
 window.addEventListener('focus', () => state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 60_000 && load());
