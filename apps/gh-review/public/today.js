@@ -7,6 +7,10 @@ const state = {
   fetchedAt: null,
   error: null,
   mentionsError: null,
+  /** Repos with test boxes, from your config: {repo: {name, label}}. */
+  sessions: {},
+  /** Each PR's box as last read: {url: {state, appUrl, endsAt, tunnel, at}}. */
+  boxes: {},
   loading: true,
   selected: sessionStorage.getItem('todaySelected'),
   status: '',
@@ -47,9 +51,29 @@ const PRIMARY = {
 };
 
 /** The other buttons on the selected row. Later features add theirs here. */
+const boxCfg = (r) => (!r.thread && state.sessions[r.repo]) || null;
+const boxName = (cfg) => (cfg.name ? `Test on ${cfg.name}` : 'Start a test box');
+const port = (u) => u?.match(/:(\d+)(?:\/|$)/)?.[1];
+
+/** The test-box buttons for one row, by the box's state. Nothing here writes until you click. */
+function boxButtons(r) {
+  const cfg = boxCfg(r);
+  if (!cfg) return '';
+  const b = state.boxes[r.url];
+  if (!b || b.loading) return `<button class="btn" type="button" disabled>${esc(cfg.name ? `Checking ${cfg.name}…` : 'Checking the test box…')}</button>`;
+  if (b.error) return `<button class="btn" type="button" data-do="box-start">${esc(boxName(cfg))} <kbd>D</kbd></button><span class="since">${esc(b.error)}</span>`;
+  if (b.state === 'booting') return `<button class="btn" type="button" disabled><i class="dot amber" aria-hidden="true"></i>Booting</button><button class="btn" type="button" data-do="box-stop">Cancel</button>`;
+  if (b.state === 'ready') {
+    const left = b.endsAt ? Math.max(0, Math.round((Date.parse(b.endsAt) - Date.now()) / 60000)) : null;
+    const where = [port(b.appUrl) && `:${port(b.appUrl)}`, left !== null && `${left} min left`].filter(Boolean).join(' · ');
+    return `<button class="btn primary" type="button" data-do="box-open"><i class="dot green" aria-hidden="true"></i>${b.opening ? 'Opening…' : 'Open'}${where ? ` <span class="mono">${esc(where)}</span>` : ''} <kbd>D</kbd></button><button class="btn" type="button" data-do="box-stop">Stop box</button>`;
+  }
+  return `<button class="btn" type="button" data-do="box-start">${esc(boxName(cfg))} <kbd>D</kbd></button>${b.state === 'ended' ? '<span class="since">last box ended</span>' : ''}`;
+}
+
 function extras(r) {
   if (r.thread) return '<button class="btn" type="button" data-do="aside">Mark read <kbd>x</kbd></button>';
-  const out = [];
+  const out = [boxButtons(r)];
   if (!['brief', 'findings'].includes(r.next)) out.push('<button class="btn" type="button" data-do="page">PR page <kbd>p</kbd></button>');
   if (!['merge', 'undraft', 'unblock'].includes(r.next)) out.push('<button class="btn" type="button" data-do="github">GitHub <kbd>o</kbd></button>');
   out.push('<button class="btn" type="button" data-do="aside">Set aside <kbd>x</kbd></button>');
@@ -102,6 +126,7 @@ const KEYS = [
   [['k', '↑'], 'Previous row'],
   [['↵'], "The row's main button"],
   [['A'], 'Approve, when the brief cleared it on this commit (asks first)'],
+  [['D'], 'Start the test box, or open it once it is up (when your config has one for the repo)'],
   [['p'], 'Open the PR page'],
   [['o'], 'Open the PR on GitHub'],
   [['x'], 'Set the row aside until the PR changes, or mark a mention read'],
@@ -129,7 +154,10 @@ function render() {
   const n = rows().length;
   $('#count').textContent = state.loading && !state.bands.length ? '–' : n;
   document.title = n ? `(${n}) Today` : 'Today';
-  $('#needs').innerHTML = state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', mentions: 'mentions' })[b.key] ?? b.key)}</span>`).join('');
+  const boxes = new Set(rows().filter((r) => boxCfg(r) && r.labels.includes(boxCfg(r).label)).map((r) => r.url)).size;
+  $('#needs').innerHTML =
+    state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', mentions: 'mentions' })[b.key] ?? b.key)}</span>`).join('') +
+    (boxes ? `<span title="PRs with a test box label on"><b>${boxes}</b>${boxes === 1 ? 'box' : 'boxes'} up</span>` : '');
   const when = state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   const stale = state.error && n;
   $('#fetched').textContent = state.loading ? 'Refreshing…' : stale ? `Couldn't refresh, showing ${when}` : when ? `Updated ${when}` : '';
@@ -142,10 +170,12 @@ function render() {
   const footer = [['j k', 'move'], ['↵', 'do it'], ['p', 'page'], ['o', 'github'], ['x', 'aside'], ['?', 'keys']];
   $('#keys').innerHTML = footer.map(([k, t]) => `<span><kbd>${esc(k)}</kbd>${esc(t)}</span>`).join('');
   renderHelp();
+  // The selected row's box is read when you land on it, then kept fresh while it boots.
+  readBox();
 }
 
 // A PR can sit in two bands (you review it and it's yours), so a row is keyed by its band too.
-const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null });
+const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null, sessions: res.sessions ?? state.sessions });
 
 async function load() {
   state.loading = true;
@@ -226,6 +256,36 @@ async function setAside(r = current()) {
   await post(r.mine ? '/api/mine/aside' : '/api/skip', { url: r.url, updatedAt: r.updatedAt });
 }
 
+/** Reads the selected row's box from GitHub, at most every 15 seconds unless forced. */
+async function readBox(r = current(), force = false) {
+  if (!r || !boxCfg(r)) return;
+  const had = state.boxes[r.url];
+  if (!force && had && (had.loading || Date.now() - had.at < 15_000)) return;
+  state.boxes[r.url] = { ...(had ?? {}), loading: !had || had.error, at: Date.now() };
+  if (!had) render();
+  const res = await fetch(`/api/session?url=${encodeURIComponent(r.url)}`).then((x) => x.json()).catch((e) => ({ error: e.message }));
+  state.boxes[r.url] = { ...res, at: Date.now() };
+  render();
+}
+
+async function box(action, r = current()) {
+  const cfg = r && boxCfg(r);
+  if (!cfg) return;
+  if (action === 'key') action = state.boxes[r.url]?.state === 'ready' ? 'open' : state.boxes[r.url]?.state === 'booting' ? null : 'start';
+  if (!action) return say('The box is still booting.');
+  if (action === 'stop' && !confirm(`Stop the test box for ${ref(r)}? This removes the ${cfg.label} label.`)) return;
+  if (action === 'open') state.boxes[r.url] = { ...state.boxes[r.url], opening: true };
+  if (action === 'start') state.boxes[r.url] = { state: 'booting', at: Date.now() };
+  render();
+  const res = await post('/api/session', { url: r.url, do: action });
+  if (res.error) {
+    state.boxes[r.url] = { ...state.boxes[r.url], opening: false };
+    return say(res.error);
+  }
+  state.boxes[r.url] = { ...res, at: Date.now() };
+  say({ start: `Added the ${cfg.label} label to ${ref(r)}. The box takes a few minutes to boot.`, stop: `Removed the ${cfg.label} label from ${ref(r)}.`, open: `Opened the box for ${ref(r)}.` }[action]);
+}
+
 function primary(r = current()) {
   if (!r) return;
   (PRIMARY[r.next] ?? PRIMARY.unblock)[2](r);
@@ -253,6 +313,7 @@ document.addEventListener('keydown', (e) => {
     ArrowUp: () => move(-1),
     Enter: () => primary(),
     A: () => approve(),
+    D: () => box('key'),
     p: () => openPage(),
     o: () => openGitHub(),
     x: () => setAside(),
@@ -275,9 +336,10 @@ $('#today').addEventListener('click', (e) => {
   state.selected = r.key;
   const b = e.target.closest('[data-do]');
   if (!b) return render();
-  ({ primary: () => primary(r), page: () => openPage(r), github: () => openGitHub(r), aside: () => setAside(r) })[b.dataset.do]?.();
+  ({ primary: () => primary(r), page: () => openPage(r), github: () => openGitHub(r), aside: () => setAside(r), 'box-start': () => box('start', r), 'box-stop': () => box('stop', r), 'box-open': () => box('open', r) })[b.dataset.do]?.();
 });
 
 window.addEventListener('focus', () => state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 60_000 && load());
 setInterval(() => !state.loading && state.fetchedAt && Date.now() - Date.parse(state.fetchedAt) > 5 * 60_000 && load(), 60_000);
+setInterval(() => document.visibilityState === 'visible' && readBox(), 15_000);
 load();

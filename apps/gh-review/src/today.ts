@@ -30,6 +30,8 @@ export interface TodayRow {
   decisions: string[];
   /** Open findings from the last bug pass on this head. */
   findings: number;
+  /** The PR's labels as of the last fetch, so the page can tell which have a test box on. */
+  labels: string[];
   /** The notification behind a mention row, which opening it or setting it aside marks read. */
   thread?: string;
 }
@@ -93,7 +95,7 @@ export function buildToday(i: TodayInput): Today {
       const b = briefOn(p, i.summaries[p.url]);
       // Approving from here only makes sense when the brief cleared it on this exact head.
       const next: Next = b.lane === 'approve' && p.author !== i.viewer ? 'approve' : 'brief';
-      return { url: p.url, repo: p.repo, number: p.number, title: p.title, tag: 'REVIEW', since: p.requestedAt, why: b.why, next, mine: false, updatedAt: p.updatedAt, headSha: p.headSha, lane: b.lane, decisions: b.decisions, findings: 0 };
+      return { url: p.url, repo: p.repo, number: p.number, title: p.title, tag: 'REVIEW', since: p.requestedAt, why: b.why, next, mine: false, updatedAt: p.updatedAt, headSha: p.headSha, lane: b.lane, decisions: b.decisions, findings: 0, labels: p.labels };
     })
     .sort((a, b) => a.since.localeCompare(b.since));
 
@@ -104,7 +106,7 @@ export function buildToday(i: TodayInput): Today {
       const s = stage(p);
       const m = s && MOVE[s.key];
       if (!m) return [];
-      const row: TodayRow = { url: p.url, repo: p.repo, number: p.number, title: p.title, tag: m.tag, since: p.updatedAt, why: s.why, next: s.next as Next, mine: true, updatedAt: p.updatedAt, headSha: p.headSha, lane: null, decisions: [], findings: s.findings };
+      const row: TodayRow = { url: p.url, repo: p.repo, number: p.number, title: p.title, tag: m.tag, since: p.updatedAt, why: s.why, next: s.next as Next, mine: true, updatedAt: p.updatedAt, headSha: p.headSha, lane: null, decisions: [], findings: s.findings, labels: p.labels };
       return [{ row, order: m.order }];
     })
     .sort((a, b) => a.order - b.order || a.row.since.localeCompare(b.row.since))
@@ -116,7 +118,7 @@ export function buildToday(i: TodayInput): Today {
     .filter((m) => !shown.has(m.url))
     .map((m) => {
       const n = m.url.match(/\/(?:pull|issues)\/(\d+)$/);
-      return { url: m.url, repo: m.repo, number: n ? Number(n[1]) : null, title: m.title, tag: m.reason === 'assign' ? 'ASSIGNED' : 'MENTION', since: m.updatedAt, why: WHY[m.reason] ?? '', next: 'thread' as Next, mine: false, updatedAt: m.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, thread: m.id };
+      return { url: m.url, repo: m.repo, number: n ? Number(n[1]) : null, title: m.title, tag: m.reason === 'assign' ? 'ASSIGNED' : 'MENTION', since: m.updatedAt, why: WHY[m.reason] ?? '', next: 'thread' as Next, mine: false, updatedAt: m.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, labels: [], thread: m.id };
     })
     .sort((a, b) => a.since.localeCompare(b.since));
 

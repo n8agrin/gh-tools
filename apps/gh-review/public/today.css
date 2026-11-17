@@ -37,6 +37,9 @@ header .needs:empty { display: none; }
 .btn.primary { color: var(--bg); background: var(--strong); border-color: var(--strong); font-weight: 600; }
 .btn.primary kbd { color: inherit; border-color: transparent; opacity: .7; }
 .btn:disabled { opacity: .55; cursor: default; }
+.btn .mono { font-size: 11.5px; opacity: .8; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot.green { background: var(--green); } .dot.amber { background: var(--amber); }
 .foot { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .foot a { text-decoration: underline; text-underline-offset: 2px; }
 .today .empty { padding: 40px 0; text-align: center; color: var(--muted); }
