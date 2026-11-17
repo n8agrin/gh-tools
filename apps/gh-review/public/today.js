@@ -7,6 +7,9 @@ const state = {
   fetchedAt: null,
   error: null,
   mentionsError: null,
+  agentsError: null,
+  /** Agent slots in use against the cap, when your config hands issues to an agent. */
+  agents: null,
   /** Repos with test boxes, from your config: {repo: {name, label}}. */
   sessions: {},
   /** Each PR's box as last read: {url: {state, appUrl, endsAt, tunnel, at}}. */
@@ -34,12 +37,14 @@ function age(iso) {
 }
 
 const ref = (r) => `${r.repo.split('/')[1]}${r.number ? `#${r.number}` : ''}`;
+/** An issue row: an agent's question, or one ready to hand to an agent. */
+const isIssue = (r) => r.next === 'answer' || r.next === 'start';
 const rows = () => state.bands.flatMap((b) => b.rows);
 const current = () => rows().find((r) => r.key === state.selected);
 const say = (msg) => ((state.status = msg), render());
 
 /** How long it's been: a review request has been waiting on you, your own PR since it last changed. */
-const sinceText = (r) => (r.mine ? `updated ${age(r.since)} ago` : r.thread ? `${age(r.since)} ago` : `waiting on you ${age(r.since)}`);
+const sinceText = (r) => (r.mine ? `updated ${age(r.since)} ago` : r.thread || r.next === 'answer' ? `${age(r.since)} ago` : r.next === 'start' ? `updated ${age(r.since)} ago` : `waiting on you ${age(r.since)}`);
 
 /** Each row's one main button: its label, its key, and what it does. */
 const PRIMARY = {
@@ -50,10 +55,12 @@ const PRIMARY = {
   findings: ['See the findings', '↵', (r) => openPage(r)],
   unblock: ['Open on GitHub', '↵', (r) => openGitHub(r)],
   thread: ['Open thread', '↵', (r) => openThread(r)],
+  answer: ['Answer on GitHub', '↵', (r) => openGitHub(r)],
+  start: ['Start agent', 'S', (r) => startAgent(r)],
 };
 
 /** The other buttons on the selected row. Later features add theirs here. */
-const boxCfg = (r) => (!r.thread && state.sessions[r.repo]) || null;
+const boxCfg = (r) => (!r.thread && !isIssue(r) && state.sessions[r.repo]) || null;
 const boxName = (cfg) => (cfg.name ? `Test on ${cfg.name}` : 'Start a test box');
 const port = (u) => u?.match(/:(\d+)(?:\/|$)/)?.[1];
 
@@ -75,7 +82,7 @@ function boxButtons(r) {
 
 /** Run locally: one slot. This PR has it, another has it, or it's free. */
 function localButtons(r) {
-  if (r.thread || !state.local.repos.includes(r.repo)) return '';
+  if (r.thread || isIssue(r) || !state.local.repos.includes(r.repo)) return '';
   const s = state.local.slot;
   if (s?.url === r.url && s.running) {
     const since = new Date(s.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -87,12 +94,17 @@ function localButtons(r) {
 
 function extras(r) {
   if (r.thread) return '<button class="btn" type="button" data-do="aside">Mark read <kbd>x</kbd></button>';
+  if (r.next === 'start') return '<button class="btn" type="button" data-do="github">GitHub <kbd>o</kbd></button>';
+  if (isIssue(r)) return '';
   const out = [boxButtons(r), localButtons(r)];
   if (!['brief', 'findings'].includes(r.next)) out.push('<button class="btn" type="button" data-do="page">PR page <kbd>p</kbd></button>');
   if (!['merge', 'undraft', 'unblock'].includes(r.next)) out.push('<button class="btn" type="button" data-do="github">GitHub <kbd>o</kbd></button>');
   out.push('<button class="btn" type="button" data-do="aside">Set aside <kbd>x</kbd></button>');
   return out.join('');
 }
+
+/** Start agent waits while every agent slot is taken; the server refuses it too. */
+const full = (r) => r.next === 'start' && state.agents && state.agents.inFlight >= state.agents.cap;
 
 function row(r) {
   const selected = r.key === state.selected;
@@ -105,7 +117,7 @@ function row(r) {
     <span class="ref mono">${esc(ref(r))}</span>
     <span class="ttl">${esc(r.title)}</span>
     <span class="since mono" title="${esc(new Date(r.since).toLocaleString())}">${esc(sinceText(r))}</span>
-    <button class="btn primary" type="button" data-do="primary">${esc(primary[0])} <kbd>${esc(primary[1])}</kbd></button>
+    ${full(r) ? `<button class="btn" type="button" disabled title="Land or close one first">All ${state.agents.cap} agent slots taken</button>` : `<button class="btn primary" type="button" data-do="primary">${esc(primary[0])} <kbd>${esc(primary[1])}</kbd></button>`}
     <div class="why">${esc(r.why)}</div>
     ${more}
     ${selected ? `<div class="acts">${extras(r)}</div>` : ''}
@@ -123,7 +135,7 @@ function renderList() {
     return;
   }
   const bands = state.bands
-    .map((b) => `<section class="band" data-band="${esc(b.key)}"><h2>${esc(b.label)} <span class="n">${b.rows.length}</span>${b.key === 'mentions' && state.mentionsError ? `<span class="n warn" title="${esc(state.mentionsError)}">couldn't refresh</span>` : ''}</h2>${b.rows.length ? `<div class="rows" role="listbox" aria-label="${esc(b.label)}">${b.rows.map(row).join('')}</div>` : '<div class="rows"><div class="none">Nothing here.</div></div>'}</section>`)
+    .map((b) => `<section class="band" data-band="${esc(b.key)}"><h2>${esc(b.label)} <span class="n">${b.rows.length}</span>${(b.key === 'mentions' && state.mentionsError) || ((b.key === 'agents' || b.key === 'start') && state.agentsError) ? `<span class="n warn" title="${esc(b.key === 'mentions' ? state.mentionsError : state.agentsError)}">couldn't refresh</span>` : ''}</h2>${b.rows.length ? `<div class="rows" role="listbox" aria-label="${esc(b.label)}">${b.rows.map(row).join('')}</div>` : '<div class="rows"><div class="none">Nothing here.</div></div>'}</section>`)
     .join('');
   const c = state.counts;
   const foot = [
@@ -142,6 +154,7 @@ const KEYS = [
   [['A'], 'Approve, when the brief cleared it on this commit (asks first)'],
   [['D'], 'Start the test box, or open it once it is up (when your config has one for the repo)'],
   [['L'], 'Run the PR locally in the one local slot (asks before moving it from another PR)'],
+  [['S'], 'Hand a Ready to start issue to the agent (asks first)'],
   [['p'], 'Open the PR page'],
   [['o'], 'Open the PR on GitHub'],
   [['x'], 'Set the row aside until the PR changes, or mark a mention read'],
@@ -171,8 +184,9 @@ function render() {
   document.title = n ? `(${n}) Today` : 'Today';
   const boxes = new Set(rows().filter((r) => boxCfg(r) && r.labels.includes(boxCfg(r).label)).map((r) => r.url)).size;
   $('#needs').innerHTML =
-    state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', mentions: 'mentions' })[b.key] ?? b.key)}</span>`).join('') +
+    state.bands.map((b) => `<span title="${esc(b.label)}"><b>${b.rows.length}</b>${esc(({ review: 'reviews', move: 'yours', agents: 'asking', mentions: 'mentions', start: 'to start' })[b.key] ?? b.key)}</span>`).join('') +
     (boxes ? `<span title="PRs with a test box label on"><b>${boxes}</b>${boxes === 1 ? 'box' : 'boxes'} up</span>` : '') +
+    (state.agents ? `<span title="Issues queued for or held by an agent, of the most at once"><b>${state.agents.inFlight} of ${state.agents.cap}</b>agents working</span>` : '') +
     (state.local.slot?.running ? `<span title="The PR in the local slot">Local <b>${esc(state.local.slot.repo.split('/')[1])}#${state.local.slot.number}</b></span>` : '');
   const when = state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   const stale = state.error && n;
@@ -191,7 +205,7 @@ function render() {
 }
 
 // A PR can sit in two bands (you review it and it's yours), so a row is keyed by its band too.
-const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null, sessions: res.sessions ?? state.sessions, local: res.local ?? state.local });
+const apply = (res) => Object.assign(state, { bands: (res.bands ?? []).map((b) => ({ ...b, rows: b.rows.map((r) => ({ ...r, key: `${b.key} ${r.url}` })) })), counts: res.counts ?? state.counts, fetchedAt: res.fetchedAt ?? null, error: res.error ?? null, mentionsError: res.mentionsError ?? null, agentsError: res.agentsError ?? null, agents: res.agents ?? null, sessions: res.sessions ?? state.sessions, local: res.local ?? state.local });
 
 async function load() {
   state.loading = true;
@@ -227,7 +241,7 @@ function drop(r) {
 }
 
 function openPage(r = current()) {
-  if (!r || r.thread) return;
+  if (!r || r.thread || isIssue(r)) return;
   sessionStorage.setItem('todaySelected', r.key);
   sessionStorage.setItem('order', JSON.stringify(rows().map((x) => x.url)));
   sessionStorage.setItem('back', '/today');
@@ -260,7 +274,7 @@ async function openThread(r = current()) {
 }
 
 async function setAside(r = current()) {
-  if (!r) return;
+  if (!r || isIssue(r)) return;
   if (r.thread) {
     drop(r);
     say(`Marked ${ref(r)} read`);
@@ -318,6 +332,19 @@ async function local(action, r = current()) {
   say(res.slot ? `${ref(r)} is running locally. Its log is ${res.slot.log}` : 'Freed the local slot.');
 }
 
+/** Adds the agent's ready label to the issue, after a confirm. The server refuses past the cap. */
+async function startAgent(r = current()) {
+  if (!r || r.next !== 'start') return say('Start agent is only offered on issues in Ready to start.');
+  if (full(r)) return say(`All ${state.agents.cap} agent slots are taken. Land or close one first.`);
+  if (!confirm(`Hand ${ref(r)} to the agent?\n\n${r.title}\n\nThis adds its ready label on GitHub.`)) return;
+  say(`Starting the agent on ${ref(r)}…`);
+  const res = await post('/api/agent/start', { url: r.url });
+  if (res.error) return say(res.error);
+  drop(r);
+  state.agents = { inFlight: res.inFlight, cap: res.cap };
+  say(`Handed ${ref(r)} to the agent. ${res.inFlight} of ${res.cap} slots in use.`);
+}
+
 function primary(r = current()) {
   if (!r) return;
   (PRIMARY[r.next] ?? PRIMARY.unblock)[2](r);
@@ -347,6 +374,7 @@ document.addEventListener('keydown', (e) => {
     A: () => approve(),
     D: () => box('key'),
     L: () => local('take'),
+    S: () => startAgent(),
     p: () => openPage(),
     o: () => openGitHub(),
     x: () => setAside(),

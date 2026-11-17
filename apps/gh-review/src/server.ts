@@ -3,10 +3,10 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachedMentions, saveMentions, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachedMentions, saveMentions, getMeta, setMeta, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, fetchLabelsAndComment, markThreadRead, setLabel, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
-import { CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from './config';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, fetchAgentIssues, fetchLabelsAndComment, markThreadRead, setLabel, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
+import { agentLabels, CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
@@ -68,6 +68,26 @@ async function sessionInfo(url: string) {
   return { ...s, tunnel: tunnelRunning(url, s.sandbox) };
 }
 
+/** Your issues for the agent rows, when your config has an agent. A failure keeps the last good copy. */
+async function freshAgents() {
+  const { agent } = await loadConfig();
+  if (!agent) return { issues: null, error: null };
+  const labels = agentLabels(agent);
+  try {
+    const issues = { ...(await fetchAgentIssues(agent.repos, labels)), cap: labels.cap };
+    setMeta('agentIssues', JSON.stringify(issues));
+    return { issues, error: null };
+  } catch (e) {
+    return { ...(await cachedAgents()), error: `Agent issues: ${(e as Error).message}` };
+  }
+}
+
+async function cachedAgents() {
+  const { agent } = await loadConfig();
+  const raw = agent ? getMeta('agentIssues') : null;
+  return { issues: raw ? JSON.parse(raw) : agent ? { ready: [], asking: [], inFlight: 0, cap: agentLabels(agent).cap } : null, error: null as string | null };
+}
+
 /** Notifications that want you. A failure keeps the last good list, with the error. */
 async function freshMentions() {
   try {
@@ -122,9 +142,9 @@ const server = Bun.serve({
       if (pathname === '/api/today') {
         // Both lists at once. ?cached=1 draws from the local copies before GitHub answers.
         const cached = new URL(req.url).searchParams.has('cached');
-        const [queue, mine, mentions] = cached
-          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }, { list: cachedMentions(), error: null }]
-          : await Promise.all([freshQueue(), freshMine(), freshMentions()]);
+        const [queue, mine, mentions, agents] = cached
+          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }, { list: cachedMentions(), error: null }, await cachedAgents()]
+          : await Promise.all([freshQueue(), freshMine(), freshMentions(), freshAgents()]);
         const today = buildToday({
           viewer: queue.viewer || mine.viewer,
           queue: queue.prs,
@@ -136,6 +156,7 @@ const server = Bun.serve({
           mineAside: getMineAside(),
           mineDone: getMineDone(),
           mentions: mentions.list,
+          agents: agents.issues ?? undefined,
         });
         const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
         const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
@@ -143,7 +164,7 @@ const server = Bun.serve({
         const { sessions = {}, local = {} } = await loadConfig();
         // Which repos get Test on Depot buttons, by the name and label your config gives them.
         const boxes = Object.fromEntries(Object.entries(sessions).map(([repo, c]) => [repo, { name: c.name ?? null, label: c.label }]));
-        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, sessions: boxes, local: { repos: Object.keys(local), slot: localSlot() } });
+        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, agentsError: agents.error, sessions: boxes, local: { repos: Object.keys(local), slot: localSlot() } });
       }
       if (pathname === '/api/session') {
         const url = new URL(req.url).searchParams.get('url') ?? '';
@@ -240,6 +261,19 @@ const server = Bun.serve({
           } catch (e) {
             return json({ error: (e as Error).message }, 400);
           }
+        }
+        if (pathname === '/api/agent/start') {
+          // Hands an issue to the agent runner by its ready label, only after Start on Today, and
+          // only while fewer than the cap are queued or in flight.
+          const { agent } = await loadConfig();
+          const url = String(body.url ?? '');
+          const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/\d+$/);
+          if (!agent || !m || !agent.repos.includes(m[1])) return json({ error: 'Not an issue in one of your agent repos.' }, 400);
+          const labels = agentLabels(agent);
+          const { inFlight } = await fetchAgentIssues(agent.repos, labels);
+          if (inFlight >= labels.cap) return json({ error: `${inFlight} of ${labels.cap} agent slots are taken. Land or close one first.` }, 409);
+          await setLabel(url, labels.ready, true);
+          return json({ ok: true, inFlight: inFlight + 1, cap: labels.cap });
         }
         if (pathname === '/api/mentions/read') {
           // Marks a notification read on GitHub, only after you open it or set it aside on Today.
