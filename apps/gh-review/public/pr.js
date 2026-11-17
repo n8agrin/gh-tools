@@ -785,7 +785,12 @@ function brief(m) {
   const bf = doneOutput(steps, 'brief');
   let html = `<div class="brief"><div class="head"><span class="kicker">Read first · about 2 min</span><h1>${esc(pr.title)}</h1>${headMeta()}${ex && !bf ? `<p class="purpose">${t(ex.one_liner)}</p>` : ''}</div>`;
 
-  const call = laneSection(steps, r) || mergeSection(steps, r);
+  // A config with the brief has retired the merge call and the help list; a run from before it
+  // still carries them, so offer the brief in their place instead of showing the old page.
+  const briefed = !!state.checks?.some((c) => c.key === 'brief');
+  const legacy = !briefed;
+  let call = laneSection(steps, r) || (legacy ? mergeSection(steps, r) : '');
+  if (!call && briefed && r && !steps.brief) call = bsec('lane', 'Brief', `<div class="flag">This run is from before the brief, so it has no lane, decisions or claims. ${liveRun() ? 'Write it once this run finishes.' : `<button class="link rerun-sec" type="button" data-only="brief">Write the brief</button> (about 2 minutes; the rest of this run stays).`}</div>`, '', 'first');
   html += call;
 
   // Risk: the color, the numbers and the map.
@@ -803,11 +808,11 @@ function brief(m) {
   html += listenSection(m);
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.
-  const h = doneOutput(steps, 'help');
+  const h = legacy && doneOutput(steps, 'help');
   if (h) {
     const asks = (h.asks ?? []).map((a) => `<div class="ask"><p><b>${t(a.question)}</b> ${t(a.stake)} ${a.where ? whereLink(a.where, r.headSha) : ''}</p>${a.why_you ? `<p class="why">${t(a.why_you)}</p>` : ''}</div>`);
     html += bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
-  } else if (steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+  } else if (legacy && steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
 
   html += claimsSection(bf, r);
   html += shapeSection(bf);

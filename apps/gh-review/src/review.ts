@@ -237,7 +237,8 @@ export async function startReview(url: string, extras: string[], only: string[] 
   const wanted = config.checks.filter((c) => !(mine && c.skipOnMine));
   const checks = base ? wanted.filter((c) => only.includes(c.key)) : wanted.filter((c) => !c.optional || extras.includes(c.key));
   const fresh = (c: Check): ReviewStep => ({ key: c.key, label: c.label, status: 'queued' });
-  const kept = (base?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree').map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
+  // A check the config no longer has (the merge call the brief replaced) isn't carried forward.
+  const kept = (base?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree' && config.checks.some((c) => c.key === x.key)).map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
   const steps: ReviewStep[] = [
     { key: 'gate', label: 'Bug pass', status: 'queued' },
     { key: 'worktree', label: 'Worktree', status: 'queued' },
