@@ -1,0 +1,7 @@
+{
+  "ready": [
+    { "url": "https://github.com/owner/repo/issues/12", "repo": "owner/repo", "number": 12, "title": "Export button does nothing on Safari", "labels": ["agent:ready"], "createdAt": "2026-11-20T10:00:00Z" },
+    { "url": "https://github.com/owner/repo/issues/9", "repo": "owner/repo", "number": 9, "title": "Typo on the settings page", "labels": ["agent:ready"], "createdAt": "2026-11-18T09:00:00Z" }
+  ],
+  "inFlight": 1
+}

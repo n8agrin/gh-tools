@@ -6,6 +6,7 @@ Small local tools for keeping up with GitHub pull requests. They run on your own
 
 - [gh-review](apps/gh-review/README.md): a local page that lists every open PR where someone asked for your review, across all repos, so you can go down the list fast. It can also run a read-only Claude review of a PR in a throwaway checkout. Runs on http://localhost:4790.
 - [gh-review for iOS](apps/gh-review-ios/README.md): the same review queue as a native SwiftUI app for iPhone and iPad.
+- [gh-runner](apps/gh-runner/README.md): watches issues assigned to you that carry an `agent:ready` label and hands each to Claude Code, so it comes back as a draft PR in gh-review. Runs in a terminal with `bun run runner`.
 - [gh-stat](apps/gh-stat/README.md): a board of your weekly GitHub numbers (PRs created, merged and reviewed, lines added and removed) for the last 12 weeks. Runs on http://localhost:4747.
 - [gh-super-inbox](apps/gh-super-inbox/README.md): a Chrome extension for `github.com/notifications` that badges each PR with why it's still in your inbox and selects the ones that merged after you approved them. On a PR's Files changed page it adds a button to mark all test files viewed and shows the PR's +/- total without test files. Load `apps/gh-super-inbox` unpacked in Chrome.
 
