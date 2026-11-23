@@ -1,0 +1,14 @@
+.calib main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; display: flex; flex-direction: column; gap: 24px; }
+.calib .lede { margin: 0; color: var(--muted); max-width: 72ch; line-height: 1.5; }
+.calib table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.calib th { text-align: left; font-weight: 500; font-size: 12px; color: var(--muted); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+.calib td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); }
+.calib .r { text-align: right; font-variant-numeric: tabular-nums; }
+.calib .faint { color: var(--muted); }
+.calib .ok { color: var(--green); font-weight: 600; }
+.calib .misses { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.calib .miss { display: flex; flex-direction: column; gap: 6px; }
+.calib .miss h2 { margin: 0; font-size: 16px; }
+.calib .miss p { margin: 0; font-size: 13px; }
+.calib .miss a { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 14px; }
+.calib .miss a:hover span:first-child { text-decoration: underline; }

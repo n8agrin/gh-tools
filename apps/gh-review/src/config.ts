@@ -64,9 +64,22 @@ export const appPath = (p: string) => (isAbsolute(expand(p)) ? expand(p) : join(
 /** Which file the settings come from. */
 export const configFile = () => (existsSync(CONFIG) ? CONFIG : EXAMPLE);
 
+/** The brief check, which took over from the merge call, Signal, Where you can help and Description vs change. */
+export const BRIEF: Check = { key: 'brief', label: 'Brief', prompt: 'prompts/brief.md', schema: 'prompts/brief.schema.json' };
+const REPLACED = new Set(['merge', 'signal', 'help', 'description']);
+
+/** An older config's merge, signal, help and description checks become one brief, where the first of them was. */
+export function upgradeChecks(checks: Check[]): Check[] {
+  if (checks.some((c) => c.key === 'brief') || !checks.some((c) => REPLACED.has(c.key))) return checks.filter((c) => !REPLACED.has(c.key));
+  const at = checks.findIndex((c) => REPLACED.has(c.key));
+  const rest = checks.filter((c) => !REPLACED.has(c.key));
+  return [...rest.slice(0, at), BRIEF, ...rest.slice(at)];
+}
+
 /** Read on every call, so edits to the file apply without a restart. */
 export async function loadConfig(): Promise<Config> {
-  return Bun.file(configFile()).json();
+  const c: Config = await Bun.file(configFile()).json();
+  return { ...c, checks: upgradeChecks(c.checks ?? []) };
 }
 
 /** What the pages need from your config. */

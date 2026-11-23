@@ -10,7 +10,7 @@ test('runs on the example until you have your own config', async () => {
   expect(CONFIG).toBe(file);
   expect(configFile()).toBe(EXAMPLE);
   const c = await loadConfig();
-  expect(c.checks.some((x) => x.key === 'signal')).toBe(true);
+  expect(c.checks.some((x) => x.key === 'brief')).toBe(true);
   // Narration is the one optional check, so a plain run stays as it was.
   expect(c.checks.filter((x) => x.optional).map((x) => x.key)).toEqual(['narrate']);
 });
@@ -50,4 +50,12 @@ test('every prompt and schema the example config names exists', async () => {
   const ex = await Bun.file(EXAMPLE).json();
   for (const c of ex.checks) for (const p of [c.prompt, c.schema].filter(Boolean)) expect(await Bun.file(appPath(p)).exists()).toBe(true);
   for (const s of ex.checks.map((c: any) => c.schema).filter(Boolean)) JSON.parse(await Bun.file(appPath(s)).text());
+});
+
+test('an older config trades merge, signal, help and description for one brief', async () => {
+  const { upgradeChecks } = await import('../src/config');
+  const c = (key: string) => ({ key, label: key });
+  expect(upgradeChecks([c('merge'), c('help'), c('explain'), c('signal'), c('check')]).map((x) => x.key)).toEqual(['brief', 'explain', 'check']);
+  expect(upgradeChecks([c('explain'), c('brief'), c('signal')]).map((x) => x.key)).toEqual(['explain', 'brief']);
+  expect(upgradeChecks([c('explain')]).map((x) => x.key)).toEqual(['explain']);
 });

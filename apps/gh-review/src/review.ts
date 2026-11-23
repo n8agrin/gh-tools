@@ -8,9 +8,9 @@ import { HOME, cachedPR, createReview, finishReview, listReviews, saveStep, view
 import { fetchDiff, fetchPR, type PRDetail } from './github';
 import { findingsNote, parseFindings, saveFindings } from './findings';
 import { appPath, DANGER, expand, loadConfig, noCheckout, ROOT, type Check } from './config';
-import { decide, floorSignal, keepFindings, pathFloor, raise, type RedPath } from './signal';
+import { keepFindings, pathFloor, type RedPath } from './signal';
 import { verifyTaste } from './taste';
-import { decideCall } from './merge';
+import { decideLane } from './lane';
 
 export const READONLY_BIN = join(ROOT, 'bin', 'readonly');
 
@@ -69,6 +69,11 @@ function stackLines(pr: PRDetail): string {
     .join('\n');
 }
 
+function linkedLines(pr: PRDetail): string {
+  if (!pr.linkedIssues?.length) return 'None.';
+  return pr.linkedIssues.map((i) => `${i.repo}#${i.number} ${i.title} (${i.url})\n<<<\n${i.body.trim() || '(empty)'}\n>>>`).join('\n\n');
+}
+
 export function context(pr: PRDetail): string {
   const base = `https://github.com/${pr.repo}/blob/${pr.baseSha}`;
   const head = `https://github.com/${pr.repo}/blob/${pr.headSha}`;
@@ -93,6 +98,9 @@ Description:
 <<<
 ${pr.body.trim() || '(empty)'}
 >>>
+
+Linked issues (the PR closes these; read them as the spec it answers):
+${linkedLines(pr)}
 
 This review is read-only. Never write to GitHub: no comments, reviews, labels, reactions or edits, and never push.`;
 }
@@ -128,9 +136,7 @@ async function claude(prompt: string, o: ClaudeOptions): Promise<any> {
 }
 
 async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: string, red: RedPath[], reviewId: number, procs?: Set<Proc>): Promise<string> {
-  // A red path decides the signal on its own, so there's nothing for the AI to add.
-  const floor = check.key === 'signal' || check.key === 'merge' ? pathFloor(pr.files.map((f) => f.path), red) : [];
-  if (floor.length && check.key === 'signal') return JSON.stringify(floorSignal(floor));
+  const floor = check.key === 'brief' ? pathFloor(pr.files.map((f) => f.path), red) : [];
   const fill = (s: string) => s.replace(/\{url\}/g, pr.url).replace(/\{repo\}/g, pr.repo).replace(/\{number\}/g, String(pr.number));
   const minutes = check.optional ? 45 : 20;
   // The findings file sits in the worktree, the one place a read-only check is allowed to write.
@@ -154,8 +160,7 @@ async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: stri
   if (check.findings) return String(res.result ?? '') + (await saveToolFindings(check, pr, findingsFile, reviewId));
   if (!schema) return String(res.result ?? '');
   const out = res.structured_output ?? JSON.parse(res.result);
-  if (check.key === 'signal') return JSON.stringify(decide(out, floor));
-  if (check.key === 'merge') return JSON.stringify(decideCall(out, floor));
+  if (check.key === 'brief') return JSON.stringify({ ...decideLane(out, floor), floor });
   if (check.key === 'check') return JSON.stringify({ findings: keepFindings(out.findings, pr.files.map((f) => f.path)) });
   if (check.key !== 'taste') return JSON.stringify(out);
 
@@ -232,7 +237,8 @@ export async function startReview(url: string, extras: string[], only: string[] 
   const wanted = config.checks.filter((c) => !(mine && c.skipOnMine));
   const checks = base ? wanted.filter((c) => only.includes(c.key)) : wanted.filter((c) => !c.optional || extras.includes(c.key));
   const fresh = (c: Check): ReviewStep => ({ key: c.key, label: c.label, status: 'queued' });
-  const kept = (base?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree').map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
+  // A check the config no longer has (the merge call the brief replaced) isn't carried forward.
+  const kept = (base?.steps ?? []).filter((x) => x.key !== 'gate' && x.key !== 'worktree' && config.checks.some((c) => c.key === x.key)).map((x) => (only.includes(x.key) ? { ...x, status: 'queued' as const, output: undefined, startedAt: undefined, endedAt: undefined } : { ...x }));
   const steps: ReviewStep[] = [
     { key: 'gate', label: 'Bug pass', status: 'queued' },
     { key: 'worktree', label: 'Worktree', status: 'queued' },
@@ -310,21 +316,15 @@ export async function startReview(url: string, extras: string[], only: string[] 
       }),
     );
 
-    // Signal and Check run side by side, so a finding raises the color once both are in.
-    const sig = steps.find((s) => s.key === 'signal');
+    // The brief runs beside Check, so a red finding raises the lane once both are in. It starts again
+    // from the AI's own answer, so a rerun of Check that clears the finding lowers it back.
+    const br = steps.find((s) => s.key === 'brief');
     const chk = steps.find((s) => s.key === 'check');
     const redid = (k: string) => checks.some((c) => c.key === k);
-    if (sig?.status === 'done' && chk?.status === 'done' && (redid('signal') || redid('check'))) {
-      const raised = raise(JSON.parse(sig.output!), JSON.parse(chk.output!).findings);
-      set('signal', { output: JSON.stringify(raised) });
-    }
-
-    // The merge call runs beside Check too, so a red finding raises it once both are in. It starts
-    // again from the AI's own answer, so a rerun of Check that clears the finding lowers it back.
-    const mc = steps.find((s) => s.key === 'merge');
-    if (mc?.status === 'done' && chk?.status === 'done' && (redid('merge') || redid('check'))) {
-      const prev = JSON.parse(mc.output!);
-      if (prev.ai) set('merge', { output: JSON.stringify(decideCall(prev.ai, pathFloor(pr.files.map((f) => f.path), config.red ?? []), JSON.parse(chk.output!).findings)) });
+    if (br?.status === 'done' && chk?.status === 'done' && (redid('brief') || redid('check'))) {
+      const prev = JSON.parse(br.output!);
+      const floor = pathFloor(pr.files.map((f) => f.path), config.red ?? []);
+      if (prev.ai) set('brief', { output: JSON.stringify({ ...decideLane(prev.ai, floor, JSON.parse(chk.output!).findings), floor }) });
     }
 
     // Throw the worktree away. --force because checks may leave scratch files behind.

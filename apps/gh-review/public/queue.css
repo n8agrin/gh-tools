@@ -225,3 +225,5 @@ footer {
   .mine .grid { grid-template-columns: 15px 10px minmax(0, 1fr) 40px 30px; }
   .mine .grid > .repo, .mine .head > span:nth-child(3) { display: none; }
 }
+.sig.green { color: var(--green); border: 1px solid var(--green); padding: 0 4px; }
+.insp .asks { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--amber); }

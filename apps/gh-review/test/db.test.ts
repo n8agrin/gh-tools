@@ -84,3 +84,18 @@ test('your own PRs never touch the review queue', () => {
   expect(db.cachedPR(mpr(2).url)?.number).toBe(2);
   expect(db.viewer()).toBe('me');
 });
+
+test('calibration pairs each brief lane with what you did, and agrees by lane', async () => {
+  const { createReview, saveReviewed, recordOutcome, calibration, agrees, reviewSummaries } = await import('../src/db');
+  const pr = (n: number) => ({ id: `cal${n}`, repo: 'o/r', number: n, title: `PR ${n}`, url: `https://github.com/o/r/pull/${n}`, headSha: 'a'.repeat(40) }) as any;
+  const brief = (lane: string, movedFrom?: string) => ({ key: 'brief', label: 'Brief', status: 'done' as const, output: JSON.stringify({ lane, intent: 'does a thing', decisions: lane === 'answer' ? [{ question: 'OK?' }] : [], movedFrom }) });
+  createReview(pr(901).url, 'a'.repeat(40), [brief('approve')]);
+  createReview(pr(902).url, 'a'.repeat(40), [brief('answer', 'read')]);
+  createReview(pr(903).url, 'a'.repeat(40), [brief('read')]);
+  saveReviewed([{ pr: pr(901), review: 'APPROVED', at: '2026-11-10T00:00:00Z' }, { pr: pr(902), review: 'CHANGES_REQUESTED', at: '2026-11-11T00:00:00Z' }]);
+  recordOutcome(pr(903).url, 'a'.repeat(40), 'COMMENT', 2, '2026-11-12T00:00:00Z');
+  const rows = calibration().filter((r) => r.url.includes('/pull/90'));
+  expect(rows.map((r) => [r.lane, r.outcome, r.aiLane])).toEqual([['read', 'commented', null], ['answer', 'changes', 'read'], ['approve', 'clean', null]]);
+  expect(rows.map((r) => agrees(r.lane, r.outcome))).toEqual([true, false, true]);
+  expect(reviewSummaries()[pr(902).url]).toMatchObject({ lane: 'answer', color: 'yellow', decisions: ['OK?'] });
+});

@@ -617,3 +617,36 @@ body.resizing #page, body.resizing #chat-log { pointer-events: none; }
 .narr-list p { margin: 2px 0 8px; max-width: 76ch; font-size: 14.5px; line-height: 1.6; color: var(--text); }
 .narr-file { padding-top: 2px; }
 .it.speaking .lbl::after { content: "♪"; margin-left: 6px; color: var(--muted); }
+
+/* The brief: the lane, the decisions that need you, the claims and the shape of the diff. */
+.decision { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--amber); border-radius: 4px; background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.decision .kicker { color: var(--amber); }
+.decision .dq { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.4; max-width: 68ch; text-wrap: pretty; }
+.decision .ds { margin: 0; font-size: 16px; line-height: 1.6; max-width: 68ch; text-wrap: pretty; }
+.decision .dw { margin: 0; font-size: 13.5px; color: var(--muted); }
+.dacts { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.dacts .btn { min-height: 36px; }
+.btn.quiet { border-color: transparent; background: none; color: var(--accent); }
+.lanewhy { font-size: 14.5px; line-height: 1.6; max-width: 72ch; }
+.lanewhy summary { cursor: pointer; color: var(--muted); font-size: 13.5px; }
+.lanewhy p { margin: 8px 0 0; }
+.lanewhy .quote { display: block; margin-top: 4px; white-space: pre-wrap; font-size: 12.5px; background: var(--hover); border-radius: 3px; padding: 4px 8px; }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border-radius: 3px; padding: 1px 6px; margin-right: 4px; }
+.tag.up { color: var(--amber); border: 1px solid currentColor; }
+.tag.down, .tag.proof { color: var(--green); border: 1px solid currentColor; }
+.tag.proof { color: var(--accent); }
+.claims { overflow-x: auto; }
+.claims table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 15px; line-height: 1.5; }
+.claims th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); }
+.claims td { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.claims tr:last-child td { border-bottom: 0; }
+.cst { display: inline-block; white-space: nowrap; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+.cst.ok { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.cst.info { color: var(--muted); background: var(--hover); }
+.cst.warn { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.cst.bad { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.shapes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.shape { min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; font-size: 14px; color: var(--fg); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; cursor: pointer; }
+.shape:hover { background: var(--hover); }
+.shape.core { border: 2px solid var(--accent); }
+.shape.core .kicker { color: var(--accent); }

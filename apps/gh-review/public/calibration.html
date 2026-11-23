@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calibration</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/queue.css" />
+  <link rel="stylesheet" href="/calibration.css" />
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem('theme') ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); } catch {}
+  </script>
+</head>
+<body class="mine calib">
+  <header>
+    <span class="count"><b>Calibration</b></span>
+    <a class="ghost" href="/" title="The PRs waiting on your review  q">Review queue</a>
+  </header>
+  <main id="calib" aria-label="how often each lane matched what you did"></main>
+  <script src="/calibration.js" type="module"></script>
+</body>
+</html>
