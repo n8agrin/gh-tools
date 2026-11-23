@@ -39,3 +39,28 @@ export async function fetchQueue(repos: string[], labels: { ready: string; worki
   const [ready, flight] = await Promise.all([q(`label:"${labels.ready}" sort:created-asc`), q(`label:"${labels.working}","${labels.blocked}"`)]);
   return { ready: ready.nodes.filter((n: any) => n?.number).map(toIssue), inFlight: flight.issueCount };
 }
+
+/** Marks every comment the runner writes, so it can tell your replies from its own (both are you on GitHub). */
+export const MARK = '<!-- gh-runner -->';
+
+const made = new Set<string>();
+/** Creates the labels in a repo the first time the runner touches it. */
+async function ensureLabels(repo: string, labels: string[]) {
+  if (made.has(repo)) return;
+  for (const l of labels) await gh(['label', 'create', l, '--repo', repo, '--color', 'BFD4F2']).catch((e) => { if (!/already exists/i.test(e.message)) throw e; });
+  made.add(repo);
+}
+
+/** Swaps one agent label for another on an issue. */
+export async function moveLabel(issue: Pick<Issue, 'url' | 'repo'>, from: string | null, to: string | null, all: string[]) {
+  await ensureLabels(issue.repo, all);
+  const args = ['issue', 'edit', issue.url];
+  if (from) args.push('--remove-label', from);
+  if (to) args.push('--add-label', to);
+  await gh(args);
+}
+
+/** Comments on an issue, with the runner's mark at the end so the first line stays readable on Today. */
+export async function comment(url: string, body: string) {
+  await gh(['issue', 'comment', url, '--body-file', '-'], `${body.trim()}\n\n${MARK}\n`);
+}

@@ -2,7 +2,7 @@
 // `agent` config uses, so Start agent on Today and this runner agree without saying so twice.
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 export const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());
 
@@ -16,6 +16,12 @@ export interface Repo {
   checkout: string;
   /** Branch new work starts from. Default main. */
   base?: string;
+  /** How to make the worktree, run in `checkout` with {path}, {branch} and {base} filled in, like
+   * ["bin/worktree-new.mts", "{path}", "origin/{base}", "-b", "{branch}"]. Default: git worktree add. */
+  worktree?: string[];
+  /** The prompt file the agent gets, with {url}, {repo} and {number} filled in. Relative paths are
+   * from this app's folder. Default prompts/fix.md. */
+  prompt?: string;
 }
 
 export interface Config {
@@ -31,9 +37,17 @@ export interface Config {
   cap?: number;
   /** Seconds between looks at GitHub. Default 60. */
   pollSeconds?: number;
+  /** Prefix for the branches agents work on. Default agent/. */
+  branchPrefix?: string;
+  /** The Claude model, passed on every run and resume. Default: whatever claude picks. */
+  model?: string;
+  /** Claude Code's --permission-mode for the agent. Default auto. */
+  permissionMode?: string;
+  /** Minutes with no output before a run counts as stuck and is stopped. Default 30. */
+  silenceMinutes?: number;
 }
 
-export type Settings = Required<Omit<Config, 'repos'>> & { repos: Record<string, Required<Repo>> };
+export type Settings = Required<Omit<Config, 'repos' | 'model'>> & { model: string | null; repos: Record<string, Required<Omit<Repo, 'worktree'>> & { worktree: string[] | null }> };
 
 /** The config with every default filled in and every path expanded. */
 export function settle(c: Config): Settings {
@@ -42,7 +56,8 @@ export function settle(c: Config): Settings {
     Object.entries(c.repos).map(([name, r]) => {
       if (!/^[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`"${name}" is not owner/repo.`);
       if (!r?.checkout) throw new Error(`${name} has no checkout.`);
-      return [name, { checkout: expand(r.checkout), base: r.base ?? 'main' }];
+      const prompt = expand(r.prompt ?? 'prompts/fix.md');
+      return [name, { checkout: expand(r.checkout), base: r.base ?? 'main', worktree: r.worktree ?? null, prompt: isAbsolute(prompt) ? prompt : join(ROOT, prompt) }];
     }),
   );
   return {
@@ -52,6 +67,10 @@ export function settle(c: Config): Settings {
     blocked: c.blocked ?? 'agent:blocked',
     cap: c.cap ?? 5,
     pollSeconds: c.pollSeconds ?? 60,
+    branchPrefix: c.branchPrefix ?? 'agent/',
+    model: c.model ?? null,
+    permissionMode: c.permissionMode ?? 'auto',
+    silenceMinutes: c.silenceMinutes ?? 30,
   };
 }
 
