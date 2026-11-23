@@ -32,10 +32,10 @@ bun run runner:plan   # look once and say what would start; changes nothing
 bun run runner        # keep watching
 ```
 
-For each issue it starts, the runner swaps `agent:ready` for `agent:working`, makes a worktree on a new branch under `~/.gh-runner/worktrees`, and runs `claude -p` there with the prompt. The agent commits but can't push or open PRs. When it ends:
+For each issue it starts, the runner swaps `agent:ready` for `agent:working`, makes a worktree on a new branch under `~/.gh-runner/worktrees`, and runs `claude -p` there with the prompt. The agent commits but can't push or open PRs; the runner does that. It pushes new commits every minute, and the first one opens a draft PR that says `Fixes owner/repo#N`, so the work is on GitHub from the start. When the agent ends:
 
-- **Done**: a comment with its summary, assumptions and any review findings it left, and the working label comes off.
+- **Done**: the last commits go up, the PR description gets the summary, tests, assumptions and any review findings it left (plus the same as hidden JSON for gh-review), the issue gets a comment linking the PR, and the working label comes off.
 - **Blocked**: its question as the first line of a comment, and `agent:blocked`, so it shows under Agents asking you on Today.
-- **Failed** (no result, a crash, or `silenceMinutes` of silence): the reason as a comment, and `agent:blocked`.
+- **Failed** (no result, a crash, or `silenceMinutes` of silence): whatever it committed is pushed anyway, then the reason as a comment, and `agent:blocked`.
 
 Each run's status, transcript and result are in `~/.gh-runner/runs/<owner>__<repo>__<number>/`.

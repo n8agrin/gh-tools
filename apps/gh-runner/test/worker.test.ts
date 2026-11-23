@@ -32,8 +32,20 @@ test('parseResult refuses results the runner cannot act on', () => {
 });
 
 test("a blocked comment leads with the question, since that's the line Today shows", () => {
-  const c = resultComment({ status: 'blocked', summary: 'Two ways to do it.', question: 'Keep the old flag?' }, 'agent/1');
+  const c = resultComment({ status: 'blocked', summary: 'Two ways to do it.', question: 'Keep the old flag?' }, 'agent/1', null);
   expect(c.split('\n')[0]).toBe('**Question:** Keep the old flag?');
-  const d = resultComment({ status: 'done', summary: 'Fixed it.', skipped: [{ finding: 'f', reason: 'r' }] }, 'agent/1');
+  const d = resultComment({ status: 'done', summary: 'Fixed it.', skipped: [{ finding: 'f', reason: 'r' }] }, 'agent/1', null);
   expect(d).toContain('- f: r');
+});
+
+test('a done PR description carries the result for gh-review to read back, even with dashes in it', async () => {
+  const { prBody } = await import('../src/worker');
+  const { decodeResult } = await import('../src/result');
+  const r = { status: 'done' as const, summary: 'Fixed --flag --> parsing.', tests: [{ command: 'bun test', passed: true }], skipped: [{ finding: 'x', reason: 'y' }] };
+  const body = prBody({ repo: 'a/b', number: 4 }, r);
+  expect(body.startsWith('Fixes a/b#4.')).toBe(true);
+  expect(body).toContain('- passed: `bun test`');
+  expect(body.split('\n').pop()!.match(/--/g)?.length).toBe(2);
+  expect(decodeResult(body)).toEqual(r);
+  expect(decodeResult(prBody({ repo: 'a/b', number: 4 }, null))).toBeNull();
 });

@@ -6,6 +6,7 @@ Watches your `agent:ready` issues and hands each to Claude Code, then opens a dr
 - Every GitHub call goes through `gh()` in `src/github.ts`, as the user.
 - Only issues assigned to the user are picked up (`scope()`); keep it that way, since a label alone is something anyone with triage rights can add.
 - The runner owns pushing and opening PRs. `claudeArgs()` denies `git push` and `gh pr` writes to the agent; keep that.
+- A done PR's description ends with the result as hidden JSON (`encodeResult()`/`decodeResult()` in `src/result.ts`). That line is the contract gh-review reads; change both sides together.
 - The worker reports through a JSON file at `$GH_RUNNER_RESULT` (`src/result.ts`). A run without one failed.
 - Comments the runner writes end with `MARK`, because on GitHub they're authored by the user too.
 - `pick()` in `src/pick.ts` decides what starts. Keep it pure and tested.

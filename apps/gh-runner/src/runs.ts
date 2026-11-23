@@ -18,6 +18,8 @@ export interface Run {
   /** Claude Code session id, so a run can be resumed. */
   sessionId: string;
   pid: number | null;
+  /** The draft PR, once the first commit is pushed. */
+  pr: string | null;
   startedAt: string;
   updatedAt: string;
   /** One line on where it is: the agent's question, why it stopped, or its summary. */

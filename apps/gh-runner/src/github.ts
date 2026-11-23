@@ -64,3 +64,16 @@ export async function moveLabel(issue: Pick<Issue, 'url' | 'repo'>, from: string
 export async function comment(url: string, body: string) {
   await gh(['issue', 'comment', url, '--body-file', '-'], `${body.trim()}\n\n${MARK}\n`);
 }
+
+/** Opens a draft PR for a branch already pushed, and returns its URL. */
+export async function openDraft(repo: string, branch: string, base: string, title: string, body: string): Promise<string> {
+  const out = await gh(['pr', 'create', '--repo', repo, '--head', branch, '--base', base, '--draft', '--title', title, '--body-file', '-'], body);
+  const url = out.trim().split('\n').pop() ?? '';
+  if (!/^https:\/\/github\.com\/.+\/pull\/\d+$/.test(url)) throw new Error(`gh pr create said: ${out.trim().slice(0, 200)}`);
+  return url;
+}
+
+/** Replaces a PR's description. */
+export async function editBody(url: string, body: string) {
+  await gh(['pr', 'edit', url, '--body-file', '-'], body);
+}

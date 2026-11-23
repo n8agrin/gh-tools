@@ -3,8 +3,8 @@
 import { existsSync, mkdirSync, openSync, writeSync, closeSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { HOME, type Settings } from './config';
-import { comment, moveLabel, type Issue } from './github';
-import { parseResult, RESULT_INSTRUCTIONS, type Result } from './result';
+import { comment, editBody, moveLabel, openDraft, type Issue } from './github';
+import { encodeResult, parseResult, RESULT_INSTRUCTIONS, type Result } from './result';
 import { runDir, runKey, saveRun, type Run } from './runs';
 
 /** Exported for tests: the branch an issue's work goes on. */
@@ -80,14 +80,42 @@ async function runClaude(s: Settings, args: string[], cwd: string, dir: string, 
   }
 }
 
+/** What a done run left for you: its assumptions, the review findings it skipped, and what it couldn't verify. */
+function leftovers(r: Result): string[] {
+  const lines: string[] = [];
+  const section = (title: string, items: string[] | undefined) => items?.length && lines.push('', `**${title}**`, ...items.map((x) => `- ${x}`));
+  section('Assumptions', r.assumptions);
+  section('Findings left', r.skipped?.map((f) => `${f.finding}: ${f.reason}`));
+  section('Not verified', r.unverified);
+  return lines;
+}
+
 /** The comment for a finished run. The first line is what Today shows. */
-export function resultComment(r: Result, branch: string): string {
-  if (r.status === 'blocked') return `**Question:** ${r.question}\n\n${r.summary}\n\nReply here to answer. Branch: \`${branch}\``;
-  const lines = [`Done on \`${branch}\`. ${r.summary}`];
-  if (r.assumptions?.length) lines.push('', '**Assumptions**', ...r.assumptions.map((a) => `- ${a}`));
-  if (r.skipped?.length) lines.push('', '**Findings left**', ...r.skipped.map((f) => `- ${f.finding}: ${f.reason}`));
-  if (r.unverified?.length) lines.push('', '**Not verified**', ...r.unverified.map((u) => `- ${u}`));
-  return lines.join('\n');
+export function resultComment(r: Result, branch: string, pr: string | null): string {
+  const where = pr ? `Draft PR: ${pr}` : `Branch: \`${branch}\``;
+  if (r.status === 'blocked') return `**Question:** ${r.question}\n\n${r.summary}\n\nReply here to answer. ${where}`;
+  return [pr ? `Done. ${where}` : 'Done, with nothing to commit.', '', r.summary, ...leftovers(r)].join('\n');
+}
+
+/** Exported for tests: the draft PR's description, with the result hidden at the end once there is one. */
+export function prBody(issue: Pick<Issue, 'repo' | 'number'>, r: Result | null): string {
+  const head = `Fixes ${issue.repo}#${issue.number}. Opened by gh-runner.`;
+  if (!r) return `${head}\n\nThe agent is still working; this PR updates as it commits.`;
+  const tests = r.tests?.length ? ['', '**Tests**', ...r.tests.map((t) => `- ${t.passed ? 'passed' : 'FAILED'}: \`${t.command}\``)] : [];
+  return [head, '', r.summary, ...tests, ...leftovers(r), '', encodeResult(r)].join('\n');
+}
+
+/** Pushes new commits and opens the draft PR on the first one. Returns the PR, if there is one yet. */
+async function sync(s: Settings, issue: Issue, r: Run, pushed: { sha: string }): Promise<string | null> {
+  const base = s.repos[issue.repo].base;
+  const ahead = Number((await run(['git', 'rev-list', '--count', `origin/${base}..HEAD`], r.worktree)).trim());
+  if (!ahead) return r.pr;
+  const sha = (await run(['git', 'rev-parse', 'HEAD'], r.worktree)).trim();
+  if (sha !== pushed.sha) {
+    await run(['git', 'push', '--force-with-lease', '-u', 'origin', `HEAD:refs/heads/${r.branch}`], r.worktree);
+    pushed.sha = sha;
+  }
+  return r.pr ?? openDraft(issue.repo, r.branch, base, issue.title, prBody(issue, null));
 }
 
 /** Works one issue that the runner has already labeled working. Never throws: a failure becomes a blocked issue with the reason. */
@@ -96,13 +124,26 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void):
   const dir = runDir(issue.repo, issue.number);
   mkdirSync(dir, { recursive: true });
   const branch = branchFor(s.branchPrefix, issue);
-  let r: Run = saveRun({ url: issue.url, repo: issue.repo, number: issue.number, title: issue.title, state: 'working', branch, worktree: join(HOME, 'worktrees', runKey(issue.repo, issue.number)), sessionId: crypto.randomUUID(), pid: null, startedAt: new Date().toISOString(), updatedAt: '', note: 'Starting.' });
+  let r: Run = saveRun({ url: issue.url, repo: issue.repo, number: issue.number, title: issue.title, state: 'working', branch, worktree: join(HOME, 'worktrees', runKey(issue.repo, issue.number)), sessionId: crypto.randomUUID(), pid: null, pr: null, startedAt: new Date().toISOString(), updatedAt: '', note: 'Starting.' });
   const tag = `${issue.repo}#${issue.number}`;
   try {
     await makeWorktree(s, issue, branch, r.worktree);
     const prompt = fill(await Bun.file(s.repos[issue.repo].prompt).text(), { url: issue.url, repo: issue.repo, number: issue.number }) + RESULT_INSTRUCTIONS;
     log(`${tag}: working in ${r.worktree}`);
-    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' })));
+    // While it works, each new commit goes up, and the first one opens the draft PR, so the work is on GitHub from minute one.
+    const pushed = { sha: '' };
+    let syncing: Promise<void> = Promise.resolve();
+    const push = () =>
+      (syncing = syncing.then(async () => {
+        const pr = await sync(s, issue, r, pushed);
+        if (pr !== r.pr) {
+          r = saveRun({ ...r, pr });
+          log(`${tag}: draft PR ${pr}`);
+        }
+      }).catch((e) => log(`${tag}: push failed, ${(e as Error).message}`)));
+    const timer = setInterval(push, 60_000);
+    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' }))).finally(() => clearInterval(timer));
+    await push();
     if (quiet) throw new Error(`no output for ${s.silenceMinutes} minutes, so it was stopped`);
     const file = join(dir, 'result.json');
     if (!existsSync(file)) {
@@ -110,7 +151,8 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void):
       throw new Error(code === 0 ? 'it finished without writing a result' : `claude exited ${code}${err ? ` (${err.slice(0, 200)})` : ''}`);
     }
     const result = parseResult(await Bun.file(file).json());
-    await comment(issue.url, resultComment(result, branch));
+    if (r.pr && result.status === 'done') await editBody(r.pr, prBody(issue, result));
+    await comment(issue.url, resultComment(result, branch, r.pr));
     await moveLabel(issue, s.working, result.status === 'blocked' ? s.blocked : null, all);
     r = saveRun({ ...r, pid: null, state: result.status, note: result.status === 'blocked' ? result.question! : result.summary });
     log(`${tag}: ${result.status}`);
@@ -118,6 +160,8 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void):
     const why = (e as Error).message;
     log(`${tag}: failed, ${why}`);
     r = saveRun({ ...r, pid: null, state: 'failed', note: why });
+    // Whatever it committed goes up anyway, so nothing is left only on this machine.
+    await sync(s, issue, r, { sha: '' }).then((pr) => (r = saveRun({ ...r, pr }))).catch(() => {});
     // Blocked, so it shows on Today as something to look at rather than vanishing.
     await comment(issue.url, `**The agent stopped:** ${why}.\n\nIts log is in \`${dir}\` on the machine running gh-runner. Remove the \`${s.blocked}\` label and add \`${s.ready}\` to try again.`).catch(() => {});
     await moveLabel(issue, s.working, s.blocked, all).catch(() => {});

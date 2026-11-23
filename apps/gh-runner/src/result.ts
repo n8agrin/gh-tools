@@ -44,3 +44,22 @@ export function parseResult(raw: unknown): Result {
   if (r.status === 'blocked' && !r.question?.trim()) throw new Error('blocked result has no question');
   return r;
 }
+
+const OPEN = '<!-- gh-runner:result ';
+const CLOSE = ' -->';
+
+/** The result as a hidden line a PR description carries, for gh-review to read back. `--` can't
+ * appear inside an HTML comment, so dashes are escaped; JSON reads - back as a dash. */
+export const encodeResult = (r: Result) => `${OPEN}${JSON.stringify(r).replace(/-/g, '\\u002d')}${CLOSE}`;
+
+/** The result a PR description carries, or null. */
+export function decodeResult(body: string): Result | null {
+  const at = body.lastIndexOf(OPEN);
+  if (at < 0) return null;
+  const end = body.indexOf(CLOSE, at + OPEN.length);
+  try {
+    return parseResult(JSON.parse(body.slice(at + OPEN.length, end < 0 ? undefined : end)));
+  } catch {
+    return null;
+  }
+}
