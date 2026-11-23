@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { HOME, type Settings } from './config';
 import { comment, editBody, moveLabel, openDraft, type Issue } from './github';
 import { encodeResult, parseResult, RESULT_INSTRUCTIONS, type Result } from './result';
-import { runDir, runKey, saveRun, type Run } from './runs';
+import { loadRun, runDir, runKey, saveRun, type Run } from './runs';
 
 /** Exported for tests: the branch an issue's work goes on. */
 export const branchFor = (prefix: string, i: Pick<Issue, 'number' | 'title'>) => {
@@ -42,10 +42,10 @@ async function addWorktree(s: Settings, issue: Issue, branch: string, path: stri
 }
 
 /** The claude command for a run, with the runner's own guard rails: it never pushes or opens PRs itself. */
-export function claudeArgs(s: Settings, prompt: string, sessionId: string): string[] {
+export function claudeArgs(s: Settings, prompt: string, sessionId: string, resume = false): string[] {
   return [
     'claude', '-p', prompt,
-    '--session-id', sessionId,
+    resume ? '--resume' : '--session-id', sessionId,
     ...(s.model ? ['--model', s.model] : []),
     '--permission-mode', s.permissionMode,
     '--output-format', 'stream-json', '--verbose',
@@ -118,18 +118,36 @@ async function sync(s: Settings, issue: Issue, r: Run, pushed: { sha: string }):
   return r.pr ?? openDraft(issue.repo, r.branch, base, issue.title, prBody(issue, null));
 }
 
-/** Works one issue that the runner has already labeled working. Never throws: a failure becomes a blocked issue with the reason. */
-export async function work(s: Settings, issue: Issue, log: (m: string) => void): Promise<Run> {
+/** How a run begins: fresh from the repo's prompt, or the same Claude session carrying on with a message. */
+export type Begin = { resume: false } | { resume: true; message: string };
+
+/** The message a resumed session gets: your answer, or a note that the runner restarted. */
+export const resumePrompt = (message: string) => `${message.trim()}\n${RESULT_INSTRUCTIONS}`;
+
+/**
+ * Works one issue that the runner has already labeled working. Never throws: a failure becomes a
+ * blocked issue with the reason. A fresh start on an issue that ran before keeps its branch,
+ * worktree and PR, with a new session.
+ */
+export async function work(s: Settings, issue: Issue, log: (m: string) => void, begin: Begin = { resume: false }): Promise<Run> {
   const all = [s.ready, s.working, s.blocked];
   const dir = runDir(issue.repo, issue.number);
   mkdirSync(dir, { recursive: true });
-  const branch = branchFor(s.branchPrefix, issue);
-  let r: Run = saveRun({ url: issue.url, repo: issue.repo, number: issue.number, title: issue.title, state: 'working', branch, worktree: join(HOME, 'worktrees', runKey(issue.repo, issue.number)), sessionId: crypto.randomUUID(), pid: null, pr: null, startedAt: new Date().toISOString(), updatedAt: '', note: 'Starting.' });
+  const before = await loadRun(issue.repo, issue.number);
+  if (begin.resume && !before) throw new Error(`no run to resume for ${issue.url}`);
+  const branch = before?.branch ?? branchFor(s.branchPrefix, issue);
+  let r: Run = saveRun({
+    url: issue.url, repo: issue.repo, number: issue.number, title: issue.title, state: 'working', branch,
+    worktree: before?.worktree ?? join(HOME, 'worktrees', runKey(issue.repo, issue.number)),
+    sessionId: begin.resume ? before!.sessionId : crypto.randomUUID(),
+    pid: null, pr: before?.pr ?? null, startedAt: before?.startedAt ?? new Date().toISOString(), updatedAt: '',
+    note: begin.resume ? 'Picking up again.' : 'Starting.',
+  });
   const tag = `${issue.repo}#${issue.number}`;
   try {
     await makeWorktree(s, issue, branch, r.worktree);
-    const prompt = fill(await Bun.file(s.repos[issue.repo].prompt).text(), { url: issue.url, repo: issue.repo, number: issue.number }) + RESULT_INSTRUCTIONS;
-    log(`${tag}: working in ${r.worktree}`);
+    const prompt = begin.resume ? resumePrompt(begin.message) : fill(await Bun.file(s.repos[issue.repo].prompt).text(), { url: issue.url, repo: issue.repo, number: issue.number }) + RESULT_INSTRUCTIONS;
+    log(`${tag}: ${begin.resume ? 'resuming' : 'working'} in ${r.worktree}`);
     // While it works, each new commit goes up, and the first one opens the draft PR, so the work is on GitHub from minute one.
     const pushed = { sha: '' };
     let syncing: Promise<void> = Promise.resolve();
@@ -142,7 +160,7 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void):
         }
       }).catch((e) => log(`${tag}: push failed, ${(e as Error).message}`)));
     const timer = setInterval(push, 60_000);
-    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' }))).finally(() => clearInterval(timer));
+    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId, begin.resume), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' }))).finally(() => clearInterval(timer));
     await push();
     if (quiet) throw new Error(`no output for ${s.silenceMinutes} minutes, so it was stopped`);
     const file = join(dir, 'result.json');
@@ -163,7 +181,7 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void):
     // Whatever it committed goes up anyway, so nothing is left only on this machine.
     await sync(s, issue, r, { sha: '' }).then((pr) => (r = saveRun({ ...r, pr }))).catch(() => {});
     // Blocked, so it shows on Today as something to look at rather than vanishing.
-    await comment(issue.url, `**The agent stopped:** ${why}.\n\nIts log is in \`${dir}\` on the machine running gh-runner. Remove the \`${s.blocked}\` label and add \`${s.ready}\` to try again.`).catch(() => {});
+    await comment(issue.url, `**The agent stopped:** ${why}.\n\nIts log is in \`${dir}\` on the machine running gh-runner. Reply here to have it pick up where it stopped, or swap \`${s.blocked}\` for \`${s.ready}\` to start over on the same branch.`).catch(() => {});
     await moveLabel(issue, s.working, s.blocked, all).catch(() => {});
   }
   return r;

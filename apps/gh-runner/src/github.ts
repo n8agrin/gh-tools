@@ -6,6 +6,8 @@ export interface Issue {
   title: string;
   labels: string[];
   createdAt: string;
+  /** The newest comment, which on a blocked issue may be your answer. */
+  lastComment?: { author: string; body: string; at: string } | null;
 }
 
 export async function gh(args: string[], stdin?: string): Promise<string> {
@@ -19,26 +21,51 @@ const SEARCH = `
 query($q: String!) {
   search(type: ISSUE, query: $q, first: 50) {
     issueCount
-    nodes { ... on Issue { url number title createdAt repository { nameWithOwner } labels(first: 20) { nodes { name } } } }
+    nodes { ... on Issue { url number title createdAt repository { nameWithOwner } labels(first: 20) { nodes { name } } comments(last: 1) { nodes { author { login } body createdAt } } } }
   }
 }`;
 
 /** Exported for tests: one search node as an Issue. */
 export function toIssue(n: any): Issue {
-  return { url: n.url, repo: n.repository?.nameWithOwner ?? '', number: n.number, title: n.title ?? '', labels: (n.labels?.nodes ?? []).map((l: any) => l.name), createdAt: n.createdAt };
+  const c = n.comments?.nodes?.[0];
+  return {
+    url: n.url,
+    repo: n.repository?.nameWithOwner ?? '',
+    number: n.number,
+    title: n.title ?? '',
+    labels: (n.labels?.nodes ?? []).map((l: any) => l.name),
+    createdAt: n.createdAt,
+    lastComment: c ? { author: c.author?.login ?? 'ghost', body: c.body ?? '', at: c.createdAt } : null,
+  };
 }
 
 /** The search for open issues assigned to you in these repos. Only your own issues are ever picked up: anyone with triage rights can label an issue, but only you put work on your machine. */
 export const scope = (repos: string[]) => `is:issue is:open archived:false assignee:@me ${repos.map((r) => `repo:${r}`).join(' ')}`;
 
-/** Issues waiting for an agent, oldest first, and how many already hold a working or blocked label. */
-export async function fetchQueue(repos: string[], labels: { ready: string; working: string; blocked: string }): Promise<{ ready: Issue[]; inFlight: number }> {
-  const fixture = process.env.GH_RUNNER_FIXTURE;
-  if (fixture) return Bun.file(fixture).json();
-  const q = async (extra: string) => JSON.parse(await gh(['api', 'graphql', '-f', `query=${SEARCH}`, '-f', `q=${scope(repos)} ${extra}`])).data.search;
-  const [ready, flight] = await Promise.all([q(`label:"${labels.ready}" sort:created-asc`), q(`label:"${labels.working}","${labels.blocked}"`)]);
-  return { ready: ready.nodes.filter((n: any) => n?.number).map(toIssue), inFlight: flight.issueCount };
+export interface Queue {
+  /** Waiting for an agent, oldest first. */
+  ready: Issue[];
+  /** Labeled working: an agent holds them, or did before the runner stopped. */
+  working: Issue[];
+  /** Labeled blocked: waiting on your answer. */
+  blocked: Issue[];
+  /** How many hold a working or blocked label. */
+  inFlight: number;
 }
+
+/** Your issues in each agent state. */
+export async function fetchQueue(repos: string[], labels: { ready: string; working: string; blocked: string }): Promise<Queue> {
+  const fixture = process.env.GH_RUNNER_FIXTURE;
+  if (fixture) return { working: [], blocked: [], ...(await Bun.file(fixture).json()) };
+  const q = async (extra: string) => JSON.parse(await gh(['api', 'graphql', '-f', `query=${SEARCH}`, '-f', `q=${scope(repos)} ${extra}`])).data.search;
+  const [ready, working, blocked] = await Promise.all([q(`label:"${labels.ready}" sort:created-asc`), q(`label:"${labels.working}"`), q(`label:"${labels.blocked}"`)]);
+  const list = (r: any): Issue[] => r.nodes.filter((n: any) => n?.number).map(toIssue);
+  return { ready: list(ready), working: list(working), blocked: list(blocked), inFlight: working.issueCount + blocked.issueCount };
+}
+
+let me: Promise<string> | null = null;
+/** Your GitHub login. Only your own comments ever reach an agent. */
+export const viewer = () => (me ??= gh(['api', 'user', '--jq', '.login']).then((o) => o.trim()));
 
 /** Marks every comment the runner writes, so it can tell your replies from its own (both are you on GitHub). */
 export const MARK = '<!-- gh-runner -->';

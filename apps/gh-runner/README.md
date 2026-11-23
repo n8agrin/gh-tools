@@ -38,4 +38,10 @@ For each issue it starts, the runner swaps `agent:ready` for `agent:working`, ma
 - **Blocked**: its question as the first line of a comment, and `agent:blocked`, so it shows under Agents asking you on Today.
 - **Failed** (no result, a crash, or `silenceMinutes` of silence): whatever it committed is pushed anyway, then the reason as a comment, and `agent:blocked`.
 
+### Answering and restarts
+
+Reply on a blocked issue and the runner picks the same Claude session back up with your reply, on the same branch and PR. Only comments from your own GitHub login count, and the runner's own comments are told apart by a hidden mark, since on GitHub they're yours too. A failed run resumes the same way, or swap `agent:blocked` for `agent:ready` to start a fresh session on the same branch.
+
+If the runner stops mid-run (a restart, the laptop sleeping), the next start finds issues still labeled `agent:working` whose process is gone and resumes each session where it left off.
+
 Each run's status, transcript and result are in `~/.gh-runner/runs/<owner>__<repo>__<number>/`.

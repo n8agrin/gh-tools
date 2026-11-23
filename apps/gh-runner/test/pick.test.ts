@@ -18,7 +18,7 @@ test('only issues assigned to you are searched', () => {
 
 test('a search node becomes an issue', () => {
   const n = { url: 'u', number: 3, title: 't', createdAt: 'c', repository: { nameWithOwner: 'a/b' }, labels: { nodes: [{ name: 'agent:ready' }] } };
-  expect(toIssue(n)).toEqual({ url: 'u', repo: 'a/b', number: 3, title: 't', labels: ['agent:ready'], createdAt: 'c' });
+  expect(toIssue(n)).toEqual({ url: 'u', repo: 'a/b', number: 3, title: 't', labels: ['agent:ready'], createdAt: 'c', lastComment: null });
 });
 
 test('settle fills defaults and refuses a config with no usable repos', () => {
