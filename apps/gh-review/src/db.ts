@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Run } from './actions';
-import type { Imported, MyPR, MyQueue, Queue, ReviewedPR, ReviewPR } from './github';
+import type { Imported, Mention, MyPR, MyQueue, Queue, ReviewedPR, ReviewPR } from './github';
 import { LANE_COLOR, LANE_NAME, type Lane } from './lane';
 
 export const HOME = process.env.GH_REVIEW_HOME ?? join(homedir(), '.gh-review');
@@ -43,6 +43,10 @@ function open(): Database {
     CREATE TABLE IF NOT EXISTS mine_done (url TEXT PRIMARY KEY, head_sha TEXT NOT NULL, done_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS outcomes (
       pr_url TEXT NOT NULL, head_sha TEXT NOT NULL, event TEXT NOT NULL, comments INTEGER NOT NULL, at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS finding_ratings (
+      pr_url TEXT NOT NULL, note_key TEXT NOT NULL, source TEXT NOT NULL, category TEXT NOT NULL,
+      rating TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (pr_url, note_key)
     );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT, pr_url TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
@@ -113,6 +117,27 @@ export function cachedMine(): MyQueue | null {
   if (!meta.mineFetchedAt) return null;
   const prs = d.query<{ data: string }, []>('SELECT data FROM mine').all().map((r) => JSON.parse(r.data) as MyPR);
   return { viewer: meta.viewer ?? '', fetchedAt: meta.mineFetchedAt, prs };
+}
+
+/** One value in the meta table, or null. */
+export function getMeta(key: string): string | null {
+  return open().query<{ value: string }, [string]>('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
+}
+
+/** Sets one value in the meta table; null removes it. */
+export function setMeta(key: string, value: string | null) {
+  if (value === null) open().run('DELETE FROM meta WHERE key = ?', [key]);
+  else open().run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [key, value]);
+}
+
+/** The last good list of mentions and replies, so Today draws before GitHub answers. */
+export function saveMentions(list: Mention[]) {
+  open().run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['mentions', JSON.stringify(list)]);
+}
+
+export function cachedMentions(): Mention[] {
+  const v = open().query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'mentions'").get()?.value;
+  return v ? (JSON.parse(v) as Mention[]) : [];
 }
 
 /** Your GitHub login as of the last fetch of either list, or null before the first one. */
@@ -496,3 +521,26 @@ export function calibration(): Calibrated[] {
 
 /** Whether a lane's call matched what you did: approve wants a clean approval, answer anything but changes, read more than a clean approval, block changes. */
 export const agrees = (lane: Lane, outcome: Outcome) => (lane === 'approve' ? outcome === 'clean' : lane === 'answer' ? outcome !== 'changes' : lane === 'block' ? outcome === 'changes' : outcome !== 'clean');
+
+export type Rating = 'useful' | 'noise';
+
+/** Your call on one Check or Taste note: useful or noise. Adding a note to your review counts as useful. A null rating clears it. */
+export function rateFinding(prUrl: string, noteKey: string, source: string, category: string, rating: Rating | null, at = new Date().toISOString()) {
+  if (!rating) return void open().run('DELETE FROM finding_ratings WHERE pr_url = ? AND note_key = ?', [prUrl, noteKey]);
+  open().run('INSERT OR REPLACE INTO finding_ratings (pr_url, note_key, source, category, rating, at) VALUES (?, ?, ?, ?, ?, ?)', [prUrl, noteKey, source, category, rating, at]);
+}
+
+/** Your ratings on one PR's notes, by note key. */
+export function findingRatings(prUrl: string): Record<string, Rating> {
+  const rows = open().query<{ note_key: string; rating: Rating }, [string]>('SELECT note_key, rating FROM finding_ratings WHERE pr_url = ?').all(prUrl);
+  return Object.fromEntries(rows.map((r) => [r.note_key, r.rating]));
+}
+
+/** How often each kind of note was worth it, so a lens that stays noisy can be cut. */
+export function findingStats(): { source: string; category: string; useful: number; noise: number }[] {
+  return open()
+    .query<{ source: string; category: string; useful: number; noise: number }, []>(
+      `SELECT source, category, SUM(rating = 'useful') AS useful, SUM(rating = 'noise') AS noise FROM finding_ratings GROUP BY source, category ORDER BY source, category`,
+    )
+    .all();
+}

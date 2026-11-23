@@ -47,7 +47,7 @@ const loadComments = () => {
 
 const state = {
   pr: null, error: null, reviews: [], optional: [], extras: new Set(), shown: null, diffIds: {}, starting: false, queue: null,
-  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {}, fu: null, filed: loadFiled(),
+  help: false, override: null, runOpen: false, cur: 'brief', reviewed: loadReviewed(), diff: null, diffError: null, showRoutine: false, descOpen: false, split: !!localStorage.getItem('diffSplit'), comments: loadComments(), draft: null, verdict: 'COMMENT', summary: '', back: 'brief', submitError: null, submitting: false, gh: null, drawer: !!localStorage.getItem('runDrawer'), files: {}, mdRendered: localStorage.getItem('mdRendered') !== '', mineList: null, bh: {}, fu: null, filed: loadFiled(), ratings: {},
 };
 
 // The Narration check, read aloud. With follow along on, the whole-PR narration opens each file as it reaches it.
@@ -62,8 +62,14 @@ const player = createPlayer((why) => {
 });
 addEventListener('pagehide', () => player.stop());
 
-// Your own PRs come back to My PRs instead of the review queue, or to the board when that's where you came from.
-const home = () => (state.pr?.mine ? (sessionStorage.getItem('back') === '/board' ? '/board' : '/mine') : '/');
+// Back goes to Today when that's where you came from. Otherwise your own PRs come back to My PRs instead
+// of the review queue, or to the board when that's where you came from.
+const BACK_NAMES = { '/': 'Today', '/board': 'Board', '/mine': 'My PRs' };
+const home = () => {
+  const back = sessionStorage.getItem('back');
+  if (back === '/' || back === '/today') return '/';
+  return state.pr?.mine ? (back === '/board' ? '/board' : '/mine') : '/queue';
+};
 
 $('#ref').textContent = `${name}#${number}`;
 $('#github').href = url;
@@ -161,8 +167,8 @@ const doneEntry = () => {
 // The bug pass as a few words in the meta line, or a box when the PR should go back to its author.
 function gate() {
   const pr = state.pr;
-  if (pr.reviewedLabel && pr.labels.includes(pr.reviewedLabel)) return { word: 'Bug pass done' };
-  if (pr.copilotReviewed) return { word: 'Copilot bug pass' };
+  if (pr.reviewedLabel && pr.labels.includes(pr.reviewedLabel)) return { word: 'Author ran a bug pass', why: `The PR has the ${pr.reviewedLabel} label` };
+  if (pr.copilotReviewed) return { word: 'Copilot reviewed', why: 'Copilot submitted a review on GitHub' };
   // Without a bug-pass label in your config there's no bug pass to expect, so say nothing.
   if (!pr.reviewedLabel) return { word: '' };
   // Sending back only makes sense on an open PR you haven't approved or finished with.
@@ -219,10 +225,11 @@ const doneOutput = (steps, k) => (steps[k]?.status === 'done' ? parse(steps[k]) 
 const allTaste = (taste) => (taste?.lenses ?? []).flatMap((l) => l.questions.map((q) => ({ ...q, lens: l.lens })));
 const tasteQuestions = (taste) => allTaste(taste).filter((q) => q.kind !== 'existing');
 const tasteExisting = (taste) => allTaste(taste).filter((q) => q.kind === 'existing');
-const LENS = { consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
+const LENS = { duplicate: 'Duplicate', simpler: 'Simpler', consistency: 'Consistency', simple_first: 'Simple first', right_sized: 'Right-sized fix', area_standards: 'Area standards' };
 
 // Prior art is what the reviewer clicks, so a taste note links a written rule first, then its first Base: link.
-const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.[0];
+// Only code outside the PR counts: a Simpler question's own PR: link is already the question's line link.
+const priorArt = (q) => q.evidence?.find((e) => /^rule:/i.test(e.label)) ?? q.evidence?.find((e) => /^base:/i.test(e.label)) ?? q.evidence?.find((e) => !/^pr:/i.test(e.label)) ?? null;
 // A taste question can carry a sketch of the suggestion: the code now, the code after, and what it replaces.
 const hasExample = (ex) => !!(ex && (ex.before?.trim() || ex.after?.trim()));
 const codeHtml = (code, lang) => {
@@ -255,14 +262,24 @@ const artLink = (art) => {
   return `<a class="ref-l" href="${safe(art.url)}" target="_blank" rel="noreferrer">${rule ? 'rule' : 'prior art'}: ${esc(art.label.replace(/^(base|rule):\s*/i, ''))}</a>`;
 };
 
+// Short paths like "mutate.server.ts" in the brief's fixes, as the changed file they name.
+const fullPath = (p) => state.pr?.files.find((f) => f.path === p || f.path.endsWith(`/${p}`))?.path ?? p;
+const briefFixes = (steps) =>
+  (doneOutput(steps, 'brief')?.fixes ?? []).flatMap((f) => {
+    const m = String(f.where).match(/^([^:\s]+)(?::(\d+)(?:-(\d+))?)?/);
+    return m ? [{ file: fullPath(m[1]), lines: m[2] ? `${m[2]}${m[3] ? `-${m[3]}` : ''}` : '', kind: 'fix', note: f.fix }] : [];
+  });
+
 function allNotes(steps) {
   return [
+    ...briefFixes(steps),
     ...(doneOutput(steps, 'check')?.findings ?? []).map((f) => ({ ...f, kind: 'finding' })),
     ...(doneOutput(steps, 'guide')?.notes ?? []),
-    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example })),
+    ...tasteQuestions(doneOutput(steps, 'taste')).map((q) => ({ file: q.file, lines: q.lines, kind: 'taste', note: q.question, why: q.why, art: priorArt(q), example: q.example, lens: q.lens })),
   ];
 }
-const NOTE_WORD = { finding: 'Check.', check: 'Check.', 'test-gap': 'Untested.', taste: 'Taste question.' };
+// Everything the agents wrote is marked AI, and says what kind of note it is.
+const NOTE_WORD = { finding: 'AI · Bug:', check: 'AI · Verify:', 'test-gap': 'AI · Untested:', taste: 'AI · Taste:', fix: 'AI · Fix:' };
 const isCheck = (n) => n.kind === 'check' || n.kind === 'finding';
 
 // The files to read and the routine ones, decided once so the sidebar, the numbers and the map agree.
@@ -358,6 +375,16 @@ function runButtonHtml() {
   return `${live || state.starting ? '<span class="spin"></span>' : `<i class="rdot ${dot}"></i>`}<b>${esc(title)}</b>${sub ? `<span class="rsub">${esc(sub)}</span>` : ''}${stale && !live ? '<span class="rstale" title="New commits since the run on screen">new commits</span>' : ''}`;
 }
 
+// Where each step's output shows on the page, and the name the page gives it.
+const STEP_SECTION = { brief: 'lane', check: 'feedback', taste: 'taste', explain: 'explain', guide: 'risk', narrate: 'listen', description: 'description', help: 'help', merge: 'merge' };
+const STEP_NAME = { check: 'Bug hunt', guide: 'Reading plan' };
+const STEP_ORDER = ['worktree', 'brief', 'check', 'taste', 'guide', 'explain', 'files', 'narrate'];
+const stepLabel = (s) => (s.label === 'Check' || s.label === 'Reading guide' ? STEP_NAME[s.key] ?? s.label : s.label);
+function drawerSteps(run, live) {
+  const at = (k) => (STEP_ORDER.includes(k) ? STEP_ORDER.indexOf(k) : STEP_ORDER.length);
+  return run.steps.filter((s) => s.key !== 'gate' && !(s.key === 'worktree' && s.status === 'done' && !live)).sort((a, b) => at(a.key) - at(b.key));
+}
+
 // The run part of the drawer: which run, what's left, and a row per step with a box to tick it for Run selected.
 function drawerRun() {
   const live = liveRun();
@@ -373,12 +400,17 @@ function drawerRun() {
   if (wt?.status === 'failed') notes.push(`<span class="bad">${esc(wt.output)}</span>`);
   if (!live && doneOutput(Object.fromEntries(run.steps.map((s) => [s.key, s])), 'taste')?.verify_error) notes.push("Taste questions weren't checked against the cited code.");
   const pickable = new Set((state.checks ?? []).filter((c) => !c.unavailable).map((c) => c.key));
-  const rows = run.steps
+  // The steps in the order the page shows them. The gate only reads a label, so it isn't a step you wait on,
+  // and the worktree only matters while it's being made or when it failed.
+  const rows = drawerSteps(run, live)
     .map((s) => {
       const p = stepLeft(s);
       const box = pickable.has(s.key) ? `<input type="checkbox" data-extra="${esc(s.key)}" ${state.extras.has(s.key) ? 'checked' : ''} title="Tick to rerun just this step">` : '<span></span>';
       const x = live && (s.status === 'running' || s.status === 'queued') && s.key !== 'worktree' && s.key !== 'gate' ? `<button class="sx" type="button" data-stop="${esc(s.key)}" title="Stop just this step">×</button>` : '';
-      return `<div class="rstep ${s.status}" data-key="${esc(s.key)}" title="${esc(s.status === 'failed' || s.status === 'skipped' ? s.output ?? '' : '')}">${box}<span class="rl">${esc(s.label)}</span><span class="rt">${esc(stepTime(s))}</span>${x}<span class="rb"><i style="width:${Math.round(p.frac * 100)}%"></i></span></div>`;
+      const sec = STEP_SECTION[s.key];
+      const name = sec && s.status === 'done' ? `<button class="rl link" type="button" data-sec-go="${esc(sec)}" title="Go to this section">${esc(stepLabel(s))}</button>` : `<span class="rl">${esc(stepLabel(s))}</span>`;
+      const why = (s.status === 'failed' || (s.status === 'skipped' && s.output !== STOPPED)) && s.output ? `<span class="rwhy">${esc(String(s.output).slice(0, 240))}</span>` : '';
+      return `<div class="rstep ${s.status}" data-key="${esc(s.key)}">${box}${name}<span class="rt">${esc(stepTime(s))}</span>${x}<span class="rb"><i style="width:${Math.round(p.frac * 100)}%"></i></span>${why}</div>`;
     })
     .join('');
   return `<div class="rd-title"><b>${live ? `Run ${live.id} running` : `Run ${run.id}`}</b><span id="rd-left" class="${live ? 'warn' : ''}">${esc(left)}</span></div>${notes.length ? `<p class="rd-note">${notes.join(' ')}</p>` : ''}<div class="rd-steps">${rows}</div>`;
@@ -389,11 +421,11 @@ function drawerHtml() {
   const r = shownRun();
   const run = live ?? r;
   const busy = !!live || state.starting;
-  const colors = ['green', 'yellow', 'red'].map((c) => `<button type="button" data-color="${c}" class="c-${c} ${state.override === c ? 'on' : ''}" title="${COLOR[c]} (${c[0]})"><i></i>${COLOR[c]}</button>`).join('');
   const inRun = new Set((run?.steps ?? []).map((s) => s.key));
-  const others = (state.checks ?? state.optional.map((o) => ({ ...o, optional: true }))).filter((c) => !inRun.has(c.key));
+  const at = (k) => (STEP_ORDER.includes(k) ? STEP_ORDER.indexOf(k) : STEP_ORDER.length);
+  const others = (state.checks ?? state.optional.map((o) => ({ ...o, optional: true }))).filter((c) => !inRun.has(c.key)).sort((a, b) => Number(!!a.optional) - Number(!!b.optional) || at(a.key) - at(b.key));
   const extras = others
-    .map((c) => `<label class="rx ${c.unavailable ? 'faint' : ''}" title="${esc(c.unavailable ?? c.hint ?? '')}"><input type="checkbox" data-extra="${esc(c.key)}" ${state.extras.has(c.key) ? 'checked' : ''} ${c.unavailable ? 'disabled' : ''}><span>${esc(c.label)}</span><i>${c.optional ? 'optional, not run' : 'not in this run'}</i></label>`)
+    .map((c) => `<label class="rx ${c.unavailable ? 'faint' : ''}" title="${esc(c.unavailable ?? c.hint ?? '')}"><input type="checkbox" data-extra="${esc(c.key)}" ${state.extras.has(c.key) ? 'checked' : ''} ${c.unavailable ? 'disabled' : ''}><span>${esc(stepLabel(c))}</span><i>${c.optional ? 'optional' : 'not in this run'}</i></label>`)
     .join('');
   const n = state.extras.size;
   const sameHead = r && state.pr && r.headSha === state.pr.headSha;
@@ -402,9 +434,8 @@ function drawerHtml() {
   const pick = state.reviews.length > 1 ? `<select id="pick">${state.reviews.map((x) => `<option value="${x.id}" ${x.id === r?.id ? 'selected' : ''}>Run ${x.id} · ${when(x.startedAt)} · ${x.error === STOPPED ? 'stopped' : x.status}</option>`).join('')}</select>` : '';
   const hints = state.optional.filter((o) => o.hint && state.extras.has(o.key)).map((o) => `<p class="rd-foot">${esc(o.label)}: ${esc(o.hint)}</p>`).join('');
   return `<div class="rd-head"><span>Review run</span><button type="button" id="rd-close" title="Close (⇧D)">✕</button></div>
-    <div class="rd-body"><span class="yourcall"><span>Your call</span><span class="seg3">${colors}</span></span>
-    <div id="rd-live">${drawerRun()}</div>
-    ${extras ? `<div class="rd-opt"><span class="kicker">Optional</span>${extras}</div>` : ''}
+    <div class="rd-body"><div id="rd-live">${drawerRun()}</div>
+    ${extras ? `<div class="rd-opt"><span class="kicker">${others.every((c) => c.optional) ? 'Optional' : 'More steps'}</span>${extras}</div>` : ''}
     <div class="rd-btns">${sel}${main}${pick}</div>
     <p class="rd-foot">Tick steps to redo just those. Runs locally in a throwaway worktree. Nothing is posted to GitHub.</p>${hints}</div>`;
 }
@@ -469,7 +500,12 @@ function sidebar(m) {
   const R = state.reviewed;
   const reading = m.groups.filter((x) => x.key !== 'routine').flatMap((x) => x.files);
   const done = reading.filter((f) => R.has(f.file)).length;
-  const left = reading.filter((f) => !R.has(f.file)).reduce((a, f) => a + mins(f), 0) + (R.has('brief') ? 0 : 2);
+  // The reading plan's minutes, less the share of lines you've read, so this and the plan agree.
+  const planned = doneOutput(m.steps, 'guide')?.minutes;
+  const unread = reading.filter((f) => !R.has(f.file));
+  const all = lines(reading);
+  const files = planned && all ? Math.round((planned * lines(unread)) / all) : unread.reduce((a, f) => a + mins(f), 0);
+  const left = files + (R.has('brief') ? 0 : 2);
   const sig = signalOf(m.steps);
   let html = '';
   if (g.sendBack) html += `<div class="sendback"><span class="k1">Send back</span><b>Author should run a bug pass</b><span>No bug-pass label and no Copilot review.</span></div>`;
@@ -510,7 +546,7 @@ function sidebar(m) {
   // Each pending comment as one line you can click to jump to it.
   const list = [...state.comments]
     .sort((a, b) => m.order.indexOf(a.path) - m.order.indexOf(b.path) || a.line - b.line)
-    .map((c) => `<button class="cj" type="button" data-jump="${c.id}" title="${esc(c.text)}"><span class="cf">${esc(shortName(c.path))}:${c.line}</span><span class="cx">${esc(c.text.split('\n')[0])}</span></button>`)
+    .map((c) => `<button class="cj" type="button" data-jump="${c.id}" title="${esc(c.text)}"><span class="cf">${esc(shortName(c.path))}:${c.line}</span><span class="cx">${esc(firstLine(c.text))}</span></button>`)
     .join('');
   html += `</nav><div class="subbox">${list ? `<div class="clist">${list}</div>` : ''}<span class="sbt"><span>${n ? plural(n, 'pending comment') : 'No pending comments'}</span>${n ? '<span class="faint">not posted yet</span>' : ''}</span><button class="btn ${n ? 'primary' : ''}" type="button" id="open-submit">Submit review<kbd>⇧S</kbd></button></div>`;
   return html;
@@ -551,7 +587,8 @@ function headMeta() {
   if (pr.isDraft) bits.push('<span class="draft-pill">Draft</span>');
   if (p?.ci === 'failure') bits.push('<span class="bad">CI failing</span>');
   if (p?.ci === 'pending') bits.push('CI running');
-  if (gate().word) bits.push(gate().word);
+  const g = gate();
+  if (g.word) bits.push(`<span title="${esc(g.why ?? '')}">${esc(g.word)}</span>`);
   const stack = stackPips();
   if (stack) bits.push(stack);
   return `<div class="meta">${bits.map((b) => `<span>${b}</span>`).join('')}</div>`;
@@ -559,10 +596,12 @@ function headMeta() {
 
 const tools = `<span class="tools"><button class="ask-md" type="button" title="Ask Claude about this section">Ask</button><button class="copy-md" type="button" title="Copy this section as markdown for a GitHub comment">Copy</button></span>`;
 // The steps each section comes from, so its Rerun button redoes just those.
-const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['signal', 'check'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'] };
+const SEC_STEPS = { lane: ['brief', 'check'], claims: ['brief'], shape: ['brief'], merge: ['merge', 'check'], risk: ['guide', 'signal'], help: ['help'], description: ['description'], explain: ['explain'], taste: ['taste'], feedback: ['check', 'taste'] };
 const rerunBtn = (id) => {
-  const keys = SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null);
-  if (!keys) return '';
+  // Only steps your config still has; a retired one (signal, merge) would be dropped by the server anyway.
+  const has = (k) => !state.checks || state.checks.some((c) => c.key === k);
+  const keys = (SEC_STEPS[id] ?? (shownRun()?.steps.some((x) => x.key === id) ? [id] : null))?.filter(has);
+  if (!keys?.length) return '';
   return shownRun() && !liveRun() ? `<button class="ask-md rerun-sec" type="button" data-only="${esc(keys.join(','))}" title="Rerun just this section, keeping the rest of the run">Rerun</button>` : '';
 };
 const bsec = (id, title, body, extra = '', cls = '') => `<section class="bsec ${cls}" id="c-${id}" data-sec="${id}"><div class="shead"><h2>${esc(title)}</h2>${extra}${tools.replace('<span class="tools">', `<span class="tools">${rerunBtn(id)}`)}</div><div class="sec-body">${body}</div></section>`;
@@ -778,6 +817,127 @@ function shapeSection(b) {
   return bsec('shape', 'Shape of the change', `<div class="shapes">${cards}</div>`, `<span class="sub">${plural(state.pr.files.length, 'file')} as ${plural(b.groups.length, 'item')}</span>`);
 }
 
+// The bug hunt's call on merging, what it found, and what it left out and why.
+const HUNT = { safe: ['Safe to merge', 'green'], careful: ['Merge with care', 'yellow'], dangerous: ['Dangerous to merge', 'red'] };
+const huntOf = (steps) => {
+  const h = doneOutput(steps, 'check');
+  return h?.verdict && HUNT[h.verdict] ? h : null;
+};
+// Every note the agents wrote, in one list you pick from: bugs first, then fixes, spots to verify and taste.
+// Add to review puts it straight into your pending review on its line; you can edit it there before you submit.
+const FB_ORDER = { finding: 0, fix: 1, check: 2, 'test-gap': 3, taste: 4 };
+function feedbackItems(m) {
+  return m.notes
+    .filter((x) => x.kind in FB_ORDER && x.file)
+    .sort((a, b) => FB_ORDER[a.kind] - FB_ORDER[b.kind] || (a.kind === 'finding' ? (RANK[b.color] ?? 0) - (RANK[a.color] ?? 0) : 0));
+}
+const inReview = (x) => state.comments.find((c) => c.path === x.file && c.from === noteKey(x));
+
+// The changed line nearest the note's own, since a review comment has to sit on a line in the diff.
+function diffLine(path, want) {
+  const ls = (state.diff?.[path]?.hunks ?? []).flatMap((h) => h.lines).filter((l) => l[0] !== '-' && l[2]);
+  if (!ls.length) return null;
+  return ls.reduce((best, l) => (Math.abs(l[2] - want) < Math.abs(best[2] - want) ? l : best), ls[0]);
+}
+
+function addNote(x) {
+  const want = Number(String(x.lines ?? '').split('-')[0]) || 1;
+  const l = diffLine(x.file, want);
+  if (!l) return status(state.diff ? `${shortName(x.file)} has no lines in the diff to comment on` : 'The diff is still loading');
+  state.comments.push({ id: Date.now(), path: x.file, side: 'RIGHT', line: l[2], code: l[3], text: noteText(x, x.file), sha: state.pr.headSha, from: noteKey(x) });
+  saveComments();
+  if (rateSource(x) && !state.ratings[noteKey(x)]) rate(x, 'useful');
+  status(`Added to your pending review on ${shortName(x.file)}:${l[2]}${l[2] !== want ? `, the nearest changed line to ${want}` : ''} · ${plural(state.comments.length, 'pending comment')}`);
+  render();
+}
+
+// Each kind of note gets its own group, in FB_ORDER, with a line on where it came from.
+const FB_GROUP = {
+  finding: ['Bugs', 'from the bug hunt, checked by the skeptic'],
+  fix: ['Fixes', 'worth making before merge, from the brief'],
+  check: ['Verify', 'spots the reading guide wants a person to check'],
+  'test-gap': ['Untested', 'behavior no test covers'],
+  taste: ['Taste', 'duplicate code and simpler ways to write it'],
+};
+const FB_CHIP = { finding: 'Bug', fix: 'Fix', check: 'Verify', 'test-gap': 'Untested', taste: 'Taste' };
+const lineOf = (x) => Number(String(x.lines ?? '').split('-')[0]) || 1;
+// Names a note is about: camelCase or snake_case identifiers and `code` spans, which tell one issue from another.
+const namesIn = (x) => new Set([...(x.note ?? '').matchAll(/`([^`]+)`|\b([a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g)].map((g) => g[1] ?? g[2]));
+// Notes about the same issue as a bug: they name the same identifier, or sit within 15 lines of it in the same file.
+function sameIssue(items) {
+  const of = new Map();
+  for (const bug of items.filter((x) => x.kind === 'finding')) {
+    const names = namesIn(bug);
+    const near = items.filter((x) => x !== bug && x.kind !== 'finding' && !of.has(x) && ((x.file === bug.file && Math.abs(lineOf(x) - lineOf(bug)) <= 15) || [...namesIn(x)].some((n) => names.has(n))));
+    if (!near.length) continue;
+    const group = { bug, notes: [bug, ...near], name: [...names][0] ?? shortName(bug.file) };
+    for (const x of group.notes) of.set(x, group);
+  }
+  return of;
+}
+const fbHide = () => !!localStorage.getItem('fbHide');
+
+function feedbackSection(m, steps) {
+  const h = huntOf(steps);
+  const items = feedbackItems(m);
+  const pending = !h && pendingBody(steps.check);
+  if (!items.length && !h && !pending) return '';
+  const added = items.filter(inReview).length;
+  const issues = sameIssue(items);
+  const kinds = Object.keys(FB_ORDER).filter((k) => items.some((x) => x.kind === k));
+  if (state.fbKind && !kinds.includes(state.fbKind)) state.fbKind = null;
+  const hide = fbHide();
+  const row = (x) => {
+    const i = items.indexOf(x);
+    const done = inReview(x);
+    if (done && hide) return '';
+    const btn = done
+      ? `<button class="link nadd" type="button" data-jump="${done.id}" title="Open it in your pending review">In your review ✓</button>`
+      : `<button class="btn" type="button" data-fb="${i}" title="Adds it to your pending review on its line, marked as an AI finding you triaged">Add to review</button>`;
+    const g = issues.get(x);
+    let chip = '';
+    if (g && g.bug === x) {
+      const counts = Object.keys(FB_CHIP).filter((k) => k !== 'finding').map((k) => [k, g.notes.filter((n) => n.kind === k).length]).filter(([, n]) => n);
+      chip = `<span class="fsame" title="Other notes about the same issue">Same issue: ${counts.map(([k, n]) => `${FB_CHIP[k]} ${n}`).join(' · ')}</span>`;
+    } else if (g) chip = `<span class="fsame" title="${esc(g.bug.note)}">Same issue as the bug</span>`;
+    // Where the comment will land, when the note's own line isn't in the diff.
+    const l = state.diff && diffLine(x.file, lineOf(x));
+    const place = !done && l && l[2] !== lineOf(x) ? `<span class="fplace">Goes on line ${l[2]}, the nearest changed line</span>` : '';
+    const tone = x.kind === 'finding' && x.color === 'red' ? ' red' : '';
+    return `<div class="fb${done ? ' added' : ''}"><span class="fk k-${x.kind}${tone}">AI · ${FB_CHIP[x.kind]}</span><div class="fx"><p>${t(x.note)}</p>${x.scenario ? `<p class="why">${t(x.scenario)}</p>` : ''}<span class="fl">${whereLink(`${x.file}${x.lines ? `:${x.lines}` : ''}`, m.r?.headSha)}${chip}${rateBtns(x)}</span></div><span class="fa">${btn}${place}</span></div>`;
+  };
+  const groups = kinds
+    .filter((k) => !state.fbKind || state.fbKind === k)
+    .map((k) => {
+      const rows = items.filter((x) => x.kind === k).map(row).join('');
+      const [title, sub] = FB_GROUP[k];
+      return rows ? `<div class="fgroup"><div class="fgh"><h3 class="k-${k}">${title}</h3><span class="faint">${sub}</span></div>${rows}</div>` : '';
+    })
+    .join('');
+  let body = '';
+  if (h) body += `<p class="mwhy"><b>Bug hunt:</b> ${t(h.verdict_why)}${h.verdict_moved ? ` <span class="faint">Was dangerous; came down because ${esc(h.verdict_moved)}.</span>` : ''}</p>`;
+  if (pending) body += pending;
+  if (items.length) {
+    const chip = (k, label, n) => `<button type="button" class="fchip${(state.fbKind ?? null) === k ? ' on' : ''}${k ? ` k-${k}` : ''}" data-fb-kind="${k ?? ''}" aria-pressed="${(state.fbKind ?? null) === k}">${label} ${n}</button>`;
+    body += `<div class="fbar"><div class="fchips" role="group" aria-label="Show notes of one kind">${chip(null, 'All', items.length)}${kinds.map((k) => chip(k, FB_CHIP[k], items.filter((x) => x.kind === k).length)).join('')}</div><label class="fhide"><input type="checkbox" id="fb-hide" ${hide ? 'checked' : ''}>Hide what's in your review</label></div>`;
+  }
+  body += groups ? `<div class="fbs">${groups}</div>` : items.length ? `<p class="faint">${hide && added ? 'Everything here is in your review.' : 'Nothing of this kind.'}</p>` : '<p class="faint">Nothing to send the author.</p>';
+  const extra = [];
+  if (h?.already_said?.length) extra.push(`<details><summary>Already raised on the PR, so left out (${h.already_said.length})</summary><ul>${h.already_said.map((x) => `<li>${t(x)}</li>`).join('')}</ul></details>`);
+  if (h?.dropped?.length) extra.push(`<details><summary>Dropped by the skeptic (${h.dropped.length})</summary><ul>${h.dropped.map((x) => `<li>${t(x.note)} <span class="faint">${esc(shortName(x.file))}:${esc(String(x.lines).split('-')[0])} · ${t(x.reason)}</span></li>`).join('')}</ul></details>`);
+  if (h?.verify_error) extra.push(`<p class="faint">The skeptic didn't run: ${esc(h.verify_error)}</p>`);
+  // Adds every note about the biggest issue that isn't in the review yet, in one click.
+  const big = [...new Set(issues.values())].map((g) => ({ ...g, left: g.notes.filter((x) => !inReview(x) && (!state.diff || diffLine(x.file, lineOf(x)))) })).filter((g) => g.left.length > 1).sort((a, b) => b.left.length - a.left.length)[0];
+  const n = state.comments.length;
+  const foot = items.length
+    ? `<div class="fbfoot"><span><b>${plural(n, 'comment')} in your review</b> <span class="faint">· each opens with ${esc(aiHead().replace(/\*\*/g, ''))}, and you can edit it before you submit</span></span><span class="fbacts">${big ? `<button class="btn" type="button" data-fb-all="${items.indexOf(big.bug)}">Add all ${big.left.length} about ${esc(big.name)}</button>` : ''}<button class="btn ${n ? 'primary' : ''}" type="button" data-open-submit>Submit review<kbd>⇧S</kbd></button></span></div>`
+    : '';
+  const [word, tone] = h ? HUNT[h.verdict] : [];
+  const same = [...new Set(issues.values())].reduce((a, g) => a + g.notes.length, 0);
+  const head = `${h ? `<span class="sig c-${tone}"><i></i>${esc(word)}</span>` : ''}<span class="sub">${plural(items.length, 'note')}${same ? ` · ${same} about the same issue` : ''}${added ? ` · ${added} in your review` : ''}</span>`;
+  return bsec('feedback', 'Feedback for the author', `<div class="huntb">${body}${extra.join('')}${foot}</div>`, head);
+}
+
 function brief(m) {
   const pr = state.pr;
   const { r, steps } = m;
@@ -793,7 +953,7 @@ function brief(m) {
   if (!call && briefed && r && !steps.brief) call = bsec('lane', 'Brief', `<div class="flag">This run is from before the brief, so it has no lane, decisions or claims. ${liveRun() ? 'Write it once this run finishes.' : `<button class="link rerun-sec" type="button" data-only="brief">Write the brief</button> (about 2 minutes; the rest of this run stays).`}</div>`, '', 'first');
   html += call;
 
-  // Risk: the color, the numbers and the map.
+  // Reading plan: the numbers and the map of what to read.
   const sig = signalOf(steps);
   let risk = '';
   const why = state.override ? (doneOutput(steps, 'signal') ? `The run said ${esc(COLOR[doneOutput(steps, 'signal').color].toLowerCase())}: ${t(doneOutput(steps, 'signal').reason)}.` : '') : sig?.floor?.length ? `Path floor: ${plural(sig.floor.length, 'file')} on a red path ${sig.floor.length === 1 ? 'is' : 'are'} always read in full.` : sig?.raisedBy ? `Raised by a check, was ${esc(sig.raisedBy)}.` : '';
@@ -801,24 +961,24 @@ function brief(m) {
   if (m.lists) risk += stats(m) + fileMap(m.lists.main, m.lists.routine);
   const g = doneOutput(steps, 'guide');
   if (g && !g.files) risk += `<div class="flag">This run is from before the file list. Run review again (<kbd>⇧R</kbd>) to get it.</div>`;
+  if (!g && pendingBody(steps.guide)) risk += pendingBody(steps.guide);
   // The run itself lives in the bottom bar and its drawer (⇧D); the brief only says when there's nothing yet.
-  if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the color, the numbers and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
+  if (!r && !liveRun()) risk += `<p class="riskwhy">No review yet. <button class="link" type="button" id="run">Run review</button> (⇧R) to get the brief, the bug hunt and the notes, or open the run (⇧D) to pick optional steps first.</p>`;
   const sigHead = sig ? `<span class="sig c-${esc(sig.color)}"><i></i>${esc(sig.title)}${sig.reason ? `: ${t(sig.reason)}` : ''}</span>` : '';
-  if (risk || sigHead) html += bsec('risk', 'Risk', risk, sigHead, call ? '' : 'first');
-  html += listenSection(m);
+  const plan = risk || sigHead ? bsec('risk', legacy ? 'Risk' : 'Reading plan', risk, sigHead, call ? '' : 'first') : '';
 
   // Where you can help: the few calls that need an expert, before the wall of findings below.
+  let help = '';
   const h = legacy && doneOutput(steps, 'help');
   if (h) {
     const asks = (h.asks ?? []).map((a) => `<div class="ask"><p><b>${t(a.question)}</b> ${t(a.stake)} ${a.where ? whereLink(a.where, r.headSha) : ''}</p>${a.why_you ? `<p class="why">${t(a.why_you)}</p>` : ''}</div>`);
-    html += bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
-  } else if (legacy && steps.help && steps.help.status !== 'skipped') html += bsec('help', 'Where you can help', stepBody(steps.help));
+    help = bsec('help', 'Where you can help', `<div class="help"><p class="${asks.length ? 'stake' : ''}">${t(h.at_stake)}</p>${asks.join('')}</div>`, `<span class="sub">The calls that need your expertise</span>`);
+  } else if (legacy && steps.help && steps.help.status !== 'skipped') help = bsec('help', 'Where you can help', stepBody(steps.help));
 
-  html += claimsSection(bf, r);
-  html += shapeSection(bf);
+  const hunt = feedbackSection(m, steps);
 
   const talk = conversation();
-  if (talk) html += bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`);
+  const convo = talk ? bsec('conversation', 'Conversation', talk, `<span class="sub">From GitHub, read only</span>`) : '';
 
   // Description: what the author wrote, next to where it and the diff disagree.
   const d = doneOutput(steps, 'description');
@@ -832,14 +992,16 @@ function brief(m) {
     const n = items.length;
     gaps = `<div class="gaps"><span class="kicker"><span>Description gaps</span><span class="${n ? 'c-yellow' : ''}">${n || '✓'}</span></span>${n ? items.join('') : `<p class="ok">Matches the diff. ${t(d.summary)}</p>`}</div>`;
   } else if (steps.description) gaps = `<div class="gaps">${stepBody(steps.description)}</div>`;
-  html += bsec('description', 'Description', `<div class="desc2">${written}${gaps}</div>`);
+  const desc = bsec('description', 'Description', `<div class="desc2">${written}${gaps}</div>`);
 
-  if (steps.explain?.status === 'done' && ex) html += bsec('explain', 'How this works', `<div class="how">${ex.steps.map((s) => howStep(s, r.headSha)).join('')}</div>`);
-  else if (steps.explain) html += bsec('explain', 'How this works', stepBody(steps.explain));
+  let how = '';
+  if (steps.explain?.status === 'done' && ex) how = bsec('explain', 'How this works', `<div class="how">${ex.steps.map((s) => howStep(s, r.headSha)).join('')}</div>`);
+  else if (steps.explain) how = bsec('explain', 'How this works', stepBody(steps.explain));
 
+  let taste = '';
   const qs = tasteQuestions(doneOutput(steps, 'taste'));
   const existing = tasteExisting(doneOutput(steps, 'taste'));
-  if (!qs.length && !existing.length && pendingBody(steps.taste)) html += bsec('taste', 'Taste questions', pendingBody(steps.taste));
+  if (!qs.length && !existing.length && pendingBody(steps.taste)) taste = bsec('taste', 'Taste questions', pendingBody(steps.taste));
   if (qs.length || existing.length) {
     const row = (q, label) => {
       const pr0 = q.file ? whereLink(`${q.file}${q.lines ? `:${String(q.lines).split('-')[0]}` : ''}`, r.headSha) : '';
@@ -847,8 +1009,12 @@ function brief(m) {
     };
     let body = qs.map((q) => row(q, LENS[q.lens] ?? q.lens)).join('');
     if (existing.length) body += `<span class="kicker taste-sub">While you're here: the existing code, not for the author</span>${existing.map((q) => row(q, 'Existing code')).join('')}`;
-    html += bsec('taste', 'Taste questions', body, `<span class="sub">Questions for the author, checked against prior art and the area's standards</span>`);
+    const newLenses = qs.every((q) => q.lens === 'duplicate' || q.lens === 'simpler');
+    taste = bsec('taste', 'Taste questions', body, `<span class="sub">${newLenses ? 'Code that already exists elsewhere, and simpler ways to write it' : "Questions for the author, checked against prior art and the area's standards"}</span>`);
   }
+
+  // The brief first, then what the agents found, then the reading plan and the rest. A legacy run keeps its old order.
+  html += legacy ? plan + listenSection(m) + help + claimsSection(bf, r) + shapeSection(bf) + hunt + convo + desc + how + taste : hunt + claimsSection(bf, r) + shapeSection(bf) + taste + plan + convo + how + desc + listenSection(m);
   for (const s of r?.steps ?? []) if (!SHOWN.includes(s.key)) html += bsec(s.key, s.label, `<div class="other">${hasFindings(s.key) && s.status === 'done' && pr.mine ? findingsPick(r, s) : ''}${stepBody(s)}</div>`);
 
   const read = state.reviewed.has('brief');
@@ -1136,7 +1302,12 @@ function openDraft(path, side, line, code, text = '', editId = null, from = null
 // ——— Callouts into your review ———
 
 // What a callout becomes as a line comment: the note, the failure it describes, and the prior art it cites.
-const noteText = (x, path) => [x.note, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+// It opens with [AI finding, triaged by @you], then says what kind of note it is: Verify: for a spot to check, Untested: for a behavior no test covers, Taste: for a question, Fix: for a suggested change; a bug is just the bug.
+const me = () => state.queue?.viewer || state.mineList?.viewer || '';
+const aiHead = () => (me() ? `**[AI finding, triaged by @${me()}]**` : '**[AI finding]**');
+const NOTE_PREFIX = { check: 'Verify: ', 'test-gap': 'Untested: ', taste: 'Taste: ', fix: 'Fix: ', finding: '' };
+const noteText = (x, path) => [aiHead(), `${NOTE_PREFIX[x.kind] ?? ''}${x.note}`, x.scenario, exampleMd(x.example, path ?? x.file), x.art?.url ? `Prior art: ${x.art.url}` : ''].filter(Boolean).join('\n\n');
+const firstLine = (text) => text.replace(/^\*\*\[AI finding[^\]]*\]\*\*\s*/, 'AI: ').split('\n')[0];
 const noteKey = (x) => `${x.kind}:${x.note}`;
 const fromNote = (path, line, key) => state.comments.find((c) => c.path === path && c.line === line && c.from === key);
 
@@ -1144,7 +1315,28 @@ const fromNote = (path, line, key) => state.comments.find((c) => c.path === path
 function noteBtn(path, line, x) {
   const added = fromNote(path, line, noteKey(x));
   if (added) return `<button class="link nadd" type="button" data-jump="${added.id}" title="Already a pending comment on line ${line}">In your review ✓</button>`;
-  return `<button class="link nadd" type="button" data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}" data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Add to review</button>`;
+  // Add puts the note in your review as written; Comment opens it on the line for you to edit first.
+  const at = `data-note-path="${esc(path)}" data-note-line="${line}" data-note-key="${esc(noteKey(x))}"`;
+  return `<span class="nacts"><button class="btn sm" type="button" data-note-add ${at} title="Adds it to your pending review on line ${line} as written">Add</button><button class="link nadd" type="button" ${at} data-note-text="${esc(noteText(x, path))}" title="Opens a comment on line ${line} with this text, for you to edit and add">Comment</button></span>`;
+}
+
+// Useful or noise on each Check and Taste note, kept locally so /calibration can show each lens's hit rate.
+const rateSource = (x) => (x.kind === 'finding' ? 'check' : x.kind === 'taste' ? 'taste' : null);
+function rateBtns(x) {
+  if (!rateSource(x)) return '';
+  const k = noteKey(x);
+  const on = state.ratings[k];
+  const b = (r, word) => `<button class="link rate ${on === r ? 'on' : ''}" type="button" data-rate="${r}" data-key="${esc(k)}" title="${on === r ? 'Clear' : `Count this note as ${r}`} (feeds /calibration)">${word}</button>`;
+  return `<span class="rates">${b('useful', 'Useful')}${b('noise', 'Noise')}</span>`;
+}
+
+async function rate(x, rating) {
+  const k = noteKey(x);
+  if (rating) state.ratings[k] = rating;
+  else delete state.ratings[k];
+  render();
+  const res = await post('/api/rate', { url, key: k, source: rateSource(x), category: x.kind === 'finding' ? x.category : x.lens, rating });
+  if (res?.error) status(`Couldn't save the rating: ${res.error}`);
 }
 
 function draftFromNote(btn) {
@@ -1152,6 +1344,9 @@ function draftFromNote(btn) {
   const line = Number(btn.dataset.noteLine);
   const code = state.diff?.[path]?.hunks.flatMap((h) => h.lines).find((l) => l[0] !== '-' && l[2] === line)?.[3] ?? '';
   openDraft(path, 'RIGHT', line, code, btn.dataset.noteText, null, btn.dataset.noteKey);
+  // Taking a note into your review is the strongest sign it was worth it.
+  const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === btn.dataset.noteKey);
+  if (x && !state.ratings[noteKey(x)]) rate(x, 'useful');
 }
 
 function saveDraft() {
@@ -1361,7 +1556,7 @@ function diffHtml(path, notes) {
     const here = n && at.get(n);
     if (!here) return '';
     at.delete(n);
-    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}</div>`).join('');
+    return here.map((x) => `<div class="inote"><div class="nt"><b>${NOTE_WORD[x.kind] ?? ''}</b> ${t(x.note)}${exampleHtml(x.example, path)}</div>${noteBtn(path, n, x)}${rateBtns(x)}</div>`).join('');
   };
   const lang = langOf(path);
   let shown = 0;
@@ -1401,7 +1596,7 @@ function fileView(m, path) {
     const line = n.lines ? `<span class="at">line ${esc(String(n.lines))}</span>` : '';
     const scenario = n.scenario ? ` <span class="why">${t(n.scenario)}</span>` : '';
     const art = n.art ? ` <a class="ref-l" href="${safe(n.art.url)}" target="_blank" rel="noreferrer">prior art</a>` : '';
-    return `<p><b>${NOTE_WORD[n.kind] ?? ''}</b> ${t(n.note)}${scenario} ${line}${art}</p>`;
+    return `<p><b>${NOTE_WORD[n.kind] ?? ''}</b> ${t(n.note)}${scenario} ${line}${art}${rateBtns(n)}</p>`;
   });
   // Threads whose lines moved away can't sit in the diff, so they're listed here.
   const stale = (state.gh?.lines ?? []).filter((c) => !c.replyTo && c.path === path && c.line === null);
@@ -1556,13 +1751,14 @@ async function load() {
   if (res.error) state.error = res.error;
   else (state.pr = res), (state.diffIds = await diffIds(res.files));
   if (state.pr?.mine && state.checks) state.checks = state.checks.filter((c) => !c.skipOnMine);
-  if (state.pr?.mine) {
-    const name = home() === '/board' ? 'Board' : 'My PRs';
+  if (BACK_NAMES[home()]) {
+    const name = BACK_NAMES[home()];
     ($('#back').href = home()), ($('#back').textContent = `← ${name}`), ($('#back').title = `Back to ${name} (esc)`);
   }
   render();
   // Everyone's comments only add to the page, so a failure just leaves them out.
   fetch(`/api/comments?url=${encodeURIComponent(url)}`).then((r) => (r.ok ? r.json() : null)).then((g) => g?.lines && ((state.gh = g), render())).catch(() => {});
+  fetch(`/api/ratings?url=${encodeURIComponent(url)}`).then((r) => (r.ok ? r.json() : null)).then((x) => x && !x.error && ((state.ratings = x), render())).catch(() => {});
   // The diff is usually wanted a few seconds later, so fetch it now.
   if (state.pr) loadDiff();
 }
@@ -1859,7 +2055,7 @@ drawFont();
 
 $('#side').addEventListener('click', (e) => {
   if (e.target.id === 'show-routine') return (state.showRoutine = true), render();
-  if (e.target.closest('#open-submit')) return openSubmit();
+  if (e.target.closest('#open-submit, [data-open-submit]')) return openSubmit();
   const jump = e.target.closest('[data-jump]');
   if (jump) return jumpToComment(Number(jump.dataset.jump));
   const box = e.target.closest('[data-tick]');
@@ -1913,8 +2109,28 @@ $('#page').addEventListener('click', (e) => {
     return render();
   }
   if (id === 'sub-back') return open(state.back === 'submit' ? 'brief' : state.back);
+  const rb = e.target.closest('[data-rate]');
+  if (rb) {
+    const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === rb.dataset.key);
+    return x && rate(x, state.ratings[rb.dataset.key] === rb.dataset.rate ? null : rb.dataset.rate);
+  }
+  const na = e.target.closest('[data-note-add]');
+  if (na) {
+    const x = allNotes(Object.fromEntries((shownRun()?.steps ?? []).map((s) => [s.key, s]))).find((n) => noteKey(n) === na.dataset.noteKey);
+    return x && addNote({ ...x, file: na.dataset.notePath, lines: na.dataset.noteLine });
+  }
   const nadd = e.target.closest('[data-note-text]');
   if (nadd) return draftFromNote(nadd);
+  const fb = e.target.closest('[data-fb]');
+  if (fb) return addNote(feedbackItems(model())[Number(fb.dataset.fb)]);
+  const fk = e.target.closest('[data-fb-kind]');
+  if (fk) return (state.fbKind = fk.dataset.fbKind || null), render();
+  const fa = e.target.closest('[data-fb-all]');
+  if (fa) {
+    const items = feedbackItems(model());
+    const g = sameIssue(items).get(items[Number(fa.dataset.fbAll)]);
+    return g?.notes.filter((x) => !inReview(x) && diffLine(x.file, lineOf(x))).forEach((x) => addNote(x));
+  }
   const nj = e.target.closest('.nadd[data-jump]');
   if (nj) return jumpToComment(Number(nj.dataset.jump));
   const cmt = e.target.closest('.cmt');
@@ -1995,11 +2211,22 @@ $('#rundrawer').addEventListener('click', (e) => {
   if (id === 'stop-run') return stopRun();
   const sx = e.target.closest('[data-stop]');
   if (sx) return stopRun(sx.dataset.stop);
+  const go = e.target.closest('[data-sec-go]');
+  if (go) {
+    if (state.cur !== 'brief') open('brief');
+    return requestAnimationFrame(() => document.getElementById(`c-${go.dataset.secGo}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
   const color = e.target.closest('[data-color]');
   if (color) return setColor(color.dataset.color);
 });
 $('#rundrawer').addEventListener('change', (e) => {
   if (e.target.dataset.extra) (e.target.checked ? state.extras.add(e.target.dataset.extra) : state.extras.delete(e.target.dataset.extra)), drawRun();
+  if (e.target.id === 'fb-hide') {
+    try {
+      localStorage.setItem('fbHide', e.target.checked ? '1' : '');
+    } catch {}
+    return render();
+  }
   if (e.target.id === 'pick') (state.shown = Number(e.target.value)), render();
 });
 

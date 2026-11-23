@@ -1,0 +1,10 @@
+{
+  "ready": [
+    { "url": "https://github.com/acme/app/issues/7", "repo": "acme/app", "number": 7, "title": "Retry flaky upload", "labels": [], "updatedAt": "2026-11-12T00:00:00Z", "lastComment": null },
+    { "url": "https://github.com/acme/app/issues/9", "repo": "acme/app", "number": 9, "title": "Export to CSV", "labels": ["enhancement"], "updatedAt": "2026-11-14T00:00:00Z", "lastComment": null }
+  ],
+  "asking": [
+    { "url": "https://github.com/acme/app/issues/3", "repo": "acme/app", "number": 3, "title": "Speed up the board", "labels": ["agent:blocked"], "updatedAt": "2026-11-15T00:00:00Z", "lastComment": { "author": "agent-bot", "body": "\n  Should the cache live in sqlite or memory?\nMore detail below.", "at": "2026-11-15T09:00:00Z", "url": "https://github.com/acme/app/issues/3#issuecomment-1" } }
+  ],
+  "inFlight": 2
+}

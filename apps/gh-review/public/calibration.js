@@ -7,7 +7,23 @@ const OUT = { clean: 'approved clean', commented: 'commented', changes: 'asked f
 const pct = (x) => `${Math.round(x * 100)}%`;
 const prPath = (url) => url.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/, '/pr/$1/$2');
 
-function draw({ rows, gate }) {
+const SOURCE = { check: 'Bug hunt', taste: 'Taste' };
+const CAT = { bug: 'Bugs', perf: 'Performance', api: 'API changes', security: 'Security', danger: 'Danger areas', duplicate: 'Duplicate code', simpler: 'Simpler code' };
+
+// Each kind of note's hit rate from your Useful and Noise marks, so a lens that stays noisy can be cut.
+function findingsTable(rows) {
+  const body = rows.length
+    ? rows
+        .map((r) => {
+          const n = r.useful + r.noise;
+          return `<tr><td><b>${esc(SOURCE[r.source] ?? r.source)}</b> · ${esc(CAT[r.category] ?? r.category)}</td><td class="r">${n}</td><td class="r">${r.useful}</td><td class="r">${r.noise}</td><td>${n ? pct(r.useful / n) : ''}</td></tr>`;
+        })
+        .join('')
+    : '<tr><td colspan="5" class="faint">No notes rated yet. Mark a note Useful or Noise on the PR page; adding one to your review counts as useful.</td></tr>';
+  return `<section class="notes"><h2>Are the notes worth it?</h2><p class="faint">Your marks on Bug hunt and Taste notes, by kind.</p><table class="lanes"><thead><tr><th>Kind of note</th><th class="r">Rated</th><th class="r">Useful</th><th class="r">Noise</th><th>Hit rate</th></tr></thead><tbody>${body}</tbody></table></section>`;
+}
+
+function draw({ rows, gate, findings = [] }) {
   const lanes = Object.keys(LANE).map((lane) => {
     const rs = rows.filter((r) => r.lane === lane);
     const n = (o) => rs.filter((r) => r.outcome === o).length;
@@ -26,7 +42,7 @@ function draw({ rows, gate }) {
     `<section class="miss"><h2>${title}</h2><p class="faint">${sub}</p>${list.length ? list.map((r) => `<a href="${esc(prPath(r.url))}"><span>${esc(r.title)}</span><span class="faint">${esc(LANE[r.lane])} · you ${esc(OUT[r.outcome])}${r.aiLane ? ` · AI said ${esc(LANE[r.aiLane])}` : ''}</span></a>`).join('') : '<p class="faint">None yet.</p>'}</section>`;
   const wrong = rows.filter((r) => (r.lane === 'approve' || r.lane === 'answer') && r.outcome === 'changes');
   const careful = rows.filter((r) => (r.lane === 'read' || r.lane === 'block') && r.outcome === 'clean');
-  $('#calib').innerHTML = `<p class="lede">Each brief's lane next to what you did with the PR: your reviews from the PR page and the queue, plus approvals and change requests on GitHub. Reverts aren't tracked yet.</p>${table}<div class="misses">${miss('Where it was wrong', 'Agent approves or Answer questions, and you asked for changes. Each is a prompt fix.', wrong)}${miss('Where it was too careful', 'Read it or Do not merge, and you approved with no comments. Each is a lane that could be lower.', careful)}</div>`;
+  $('#calib').innerHTML = `<p class="lede">Each brief's lane next to what you did with the PR: your reviews from the PR page and the queue, plus approvals and change requests on GitHub. Reverts aren't tracked yet.</p>${table}<div class="misses">${miss('Where it was wrong', 'Agent approves or Answer questions, and you asked for changes. Each is a prompt fix.', wrong)}${miss('Where it was too careful', 'Read it or Do not merge, and you approved with no comments. Each is a lane that could be lower.', careful)}</div>${findingsTable(findings)}`;
 }
 
 fetch('/api/calibration')

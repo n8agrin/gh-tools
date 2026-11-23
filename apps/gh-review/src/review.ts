@@ -5,12 +5,13 @@
 import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { HOME, cachedPR, createReview, finishReview, listReviews, saveStep, viewer, type Review, type ReviewStep } from './db';
-import { fetchDiff, fetchPR, type PRDetail } from './github';
+import { fetchComments, fetchDiff, fetchPR, type PRDetail } from './github';
 import { findingsNote, parseFindings, saveFindings } from './findings';
 import { appPath, DANGER, expand, loadConfig, noCheckout, ROOT, type Check } from './config';
 import { keepFindings, pathFloor, type RedPath } from './signal';
 import { verifyTaste } from './taste';
 import { decideLane } from './lane';
+import { saidLines, VERDICTS, verifyHunt } from './hunt';
 
 export const READONLY_BIN = join(ROOT, 'bin', 'readonly');
 
@@ -135,7 +136,10 @@ async function claude(prompt: string, o: ClaudeOptions): Promise<any> {
   return res;
 }
 
-async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: string, red: RedPath[], reviewId: number, procs?: Set<Proc>): Promise<string> {
+// Check and Taste run on every PR, so they're told what's already been said there and skip it.
+const HEARS_SAID = new Set(['check', 'taste']);
+
+async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: string, red: RedPath[], reviewId: number, procs?: Set<Proc>, said = ''): Promise<string> {
   const floor = check.key === 'brief' ? pathFloor(pr.files.map((f) => f.path), red) : [];
   const fill = (s: string) => s.replace(/\{url\}/g, pr.url).replace(/\{repo\}/g, pr.repo).replace(/\{number\}/g, String(pr.number));
   const minutes = check.optional ? 45 : 20;
@@ -152,7 +156,8 @@ async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: stri
   const isFile = !check.prompt.startsWith('/');
   // Prompt files can name {{danger}}, the areas your config says need a careful read.
   const danger = ((await loadConfig()).danger ?? DANGER).join(', ');
-  const prompt = isFile ? (await Bun.file(appPath(check.prompt)).text()).replace(/\{\{danger\}\}/g, danger) + context(pr) : fill(check.prompt);
+  const heard = HEARS_SAID.has(check.key) && said ? `\n\nAlready said on this PR, by people and other AI reviewers (read only; don't repeat it):\n${said}` : '';
+  const prompt = isFile ? (await Bun.file(appPath(check.prompt)).text()).replace(/\{\{danger\}\}/g, danger) + context(pr) + heard : fill(check.prompt);
   const schema = check.schema ? await Bun.file(appPath(check.schema)).text() : undefined;
   const note = [check.note, findingsFile && findingsNote(findingsFile)].filter(Boolean).join('\n\n') || undefined;
   const opts = { cwd, worktrees, procs, schema, edits: check.optional || check.findings, note, model: check.model, minutes };
@@ -161,7 +166,25 @@ async function runCheck(check: Check, pr: PRDetail, cwd: string, worktrees: stri
   if (!schema) return String(res.result ?? '');
   const out = res.structured_output ?? JSON.parse(res.result);
   if (check.key === 'brief') return JSON.stringify({ ...decideLane(out, floor), floor });
-  if (check.key === 'check') return JSON.stringify({ findings: keepFindings(out.findings, pr.files.map((f) => f.path)) });
+  if (check.key === 'check') {
+    const kept = { verdict: VERDICTS.includes(out.verdict) ? out.verdict : 'careful', verdict_why: String(out.verdict_why ?? ''), already_said: (out.already_said ?? []).filter((x: unknown) => typeof x === 'string' && x.trim()), findings: keepFindings(out.findings, pr.files.map((f) => f.path)) };
+    // A second, skeptical pass tries to disprove each finding against the code.
+    const verifyPrompt = (await Bun.file(join(ROOT, 'prompts/check-verify.md')).text()).replace(/<base>/g, pr.baseSha);
+    const verifySchema = await Bun.file(join(ROOT, 'prompts/check-verify.schema.json')).text();
+    const read = async (path: string) => {
+      const f = Bun.file(join(cwd, path));
+      return (await f.exists()) ? f.text() : null;
+    };
+    const ask = async (text: string) => {
+      const v = await claude(verifyPrompt + text, { cwd, worktrees, procs, schema: verifySchema, minutes: 15 });
+      return v.structured_output ?? JSON.parse(v.result);
+    };
+    try {
+      return JSON.stringify(await verifyHunt(kept, { read, ask }));
+    } catch (e) {
+      return JSON.stringify({ ...kept, verify_error: (e as Error).message });
+    }
+  }
   if (check.key !== 'taste') return JSON.stringify(out);
 
   // A second, skeptical pass drops comparisons where the prior art doesn't do the same job.
@@ -244,6 +267,8 @@ export async function startReview(url: string, extras: string[], only: string[] 
     { key: 'worktree', label: 'Worktree', status: 'queued' },
     ...(base ? [...kept, ...checks.filter((c) => !kept.some((x) => x.key === c.key)).map(fresh)] : checks.map(fresh)),
   ];
+  // What people and other AI reviewers already said, so Check and Taste don't repeat it.
+  const said = checks.some((c) => HEARS_SAID.has(c.key)) ? await fetchComments(url).then((c) => saidLines(c)).catch((e) => `Couldn't read the PR's comments: ${(e as Error).message}`) : '';
   const id = createReview(url, pr.headSha, steps);
   const now = () => new Date().toISOString();
   const set = (key: string, patch: Partial<ReviewStep>) => {
@@ -306,7 +331,7 @@ export async function startReview(url: string, extras: string[], only: string[] 
           return set(c.key, { status: 'skipped', output: `This PR's branch doesn't have ${c.needsInPR} yet. Rebasing it on its base branch may bring it in.` });
         set(c.key, { status: 'running', startedAt: now() });
         try {
-          const output = await runCheck(c, pr, dir, worktrees, config.red ?? [], id, sc.procs);
+          const output = await runCheck(c, pr, dir, worktrees, config.red ?? [], id, sc.procs, said);
           if (sc.stopped) return ctl.mark(c.key);
           set(c.key, { status: 'done', endedAt: now(), output });
         } catch (e) {

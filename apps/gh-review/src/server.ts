@@ -3,12 +3,15 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachedMentions, saveMentions, getMeta, setMeta, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
-import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
-import { CONFIG, configFile, EXAMPLE, loadConfig, pageConfig } from './config';
+import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, fetchAgentIssues, fetchLabelsAndComment, markThreadRead, setLabel, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
+import { agentLabels, CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
+import { buildToday } from './today';
+import { localSlot, releaseSlot, slotBlockers, takeSlot } from './local';
+import { openCommand, sessionState, startTunnel, stopTunnel, tunnelRunning } from './session';
 
 const PORT = Number(process.env.PORT ?? 4790);
 /** A lane earns bulk approval at this agreement over at least this many PRs. Tune it to taste. */
@@ -34,6 +37,81 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 /** Your login, from the last fetch of either list or, before any fetch, from GitHub. */
 const me = async () => viewer() ?? (await fetchViewer());
 
+/** The review queue, fresh from GitHub and saved, or the last good copy with the error when GitHub fails. */
+async function freshQueue() {
+  try {
+    const q = await fetchQueue(listImported());
+    saveQueue(q);
+    saveReviewed(q.reviewed);
+    return q;
+  } catch (e) {
+    const cached = cachedQueue();
+    if (!cached) throw e;
+    return { ...cached, error: (e as Error).message };
+  }
+}
+
+/** The test-box settings for a PR's repo, or null when your config has none. */
+async function sessionConfig(url: string) {
+  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+$/);
+  return m ? ((await loadConfig()).sessions?.[m[1]] ?? null) : null;
+}
+
+/** A PR's test box, read fresh from GitHub: the label and the bot's newest comment. */
+async function sessionInfo(url: string) {
+  const cfg = await sessionConfig(url);
+  if (!cfg) return { state: 'none', sandbox: null, appUrl: null, endsAt: null, tunnel: false };
+  const { labels, comment } = await fetchLabelsAndComment(url, [cfg.up, cfg.ended]);
+  const s = sessionState(cfg, labels.includes(cfg.label), comment);
+  // A box that went away takes its tunnel with it.
+  if (s.state !== 'ready') stopTunnel(url);
+  return { ...s, tunnel: tunnelRunning(url, s.sandbox) };
+}
+
+/** Your issues for the agent rows, when your config has an agent. A failure keeps the last good copy. */
+async function freshAgents() {
+  const { agent } = await loadConfig();
+  if (!agent) return { issues: null, error: null };
+  const labels = agentLabels(agent);
+  try {
+    const issues = { ...(await fetchAgentIssues(agent.repos, labels)), cap: labels.cap };
+    setMeta('agentIssues', JSON.stringify(issues));
+    return { issues, error: null };
+  } catch (e) {
+    return { ...(await cachedAgents()), error: `Agent issues: ${(e as Error).message}` };
+  }
+}
+
+async function cachedAgents() {
+  const { agent } = await loadConfig();
+  const raw = agent ? getMeta('agentIssues') : null;
+  return { issues: raw ? JSON.parse(raw) : agent ? { ready: [], asking: [], inFlight: 0, cap: agentLabels(agent).cap } : null, error: null as string | null };
+}
+
+/** Notifications that want you. A failure keeps the last good list, with the error. */
+async function freshMentions() {
+  try {
+    const list = await fetchMentions();
+    saveMentions(list);
+    return { list, error: null };
+  } catch (e) {
+    return { list: cachedMentions(), error: `Notifications: ${(e as Error).message}` };
+  }
+}
+
+/** Your own open PRs, the same way. */
+async function freshMine() {
+  try {
+    const q = await fetchMine();
+    saveMine(q);
+    return q;
+  } catch (e) {
+    const cached = cachedMine();
+    if (!cached) throw e;
+    return { ...cached, error: (e as Error).message };
+  }
+}
+
 markInterrupted();
 
 const server = Bun.serve({
@@ -48,17 +126,8 @@ const server = Bun.serve({
         const extra = () => ({ skipped: getSkipped(), actions: loadedActions, done: listDone(), reviews: reviewSummaries(), live: liveReviews(), ...page });
         const [loadedActions, page] = await Promise.all([loadActions(), pageConfig()]);
         if (new URL(req.url).searchParams.has('cached')) return json({ ...(cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }), ...extra() });
-        try {
-          const q = await fetchQueue(listImported());
-          saveQueue(q);
-          saveReviewed(q.reviewed);
-          return json({ ...q, ...extra() });
-        } catch (e) {
-          // GitHub failed (rate limit, expired login): show the last good list and say why it's stale.
-          const cached = cachedQueue();
-          if (!cached) throw e;
-          return json({ ...cached, ...extra(), error: (e as Error).message });
-        }
+        // GitHub failed (rate limit, expired login): freshQueue shows the last good list and says why it's stale.
+        return json({ ...(await freshQueue()), ...extra() });
       }
       if (pathname === '/api/mine') {
         // Your own PRs, on their own page with their own cache and set-aside list. The board reads the same answer, plus a stage per PR.
@@ -67,15 +136,39 @@ const server = Bun.serve({
           const cached = cachedMine() ?? { prs: [], viewer: '', fetchedAt: null };
           return json({ ...cached, ...(await extra(cached.prs)) });
         }
-        try {
-          const q = await fetchMine();
-          saveMine(q);
-          return json({ ...q, ...(await extra(q.prs)) });
-        } catch (e) {
-          const cached = cachedMine();
-          if (!cached) throw e;
-          return json({ ...cached, ...(await extra(cached.prs)), error: (e as Error).message });
-        }
+        const q = await freshMine();
+        return json({ ...q, ...(await extra(q.prs)) });
+      }
+      if (pathname === '/api/today') {
+        // Both lists at once. ?cached=1 draws from the local copies before GitHub answers.
+        const cached = new URL(req.url).searchParams.has('cached');
+        const [queue, mine, mentions, agents] = cached
+          ? [cachedQueue() ?? { prs: [], viewer: '', fetchedAt: null }, cachedMine() ?? { prs: [], viewer: '', fetchedAt: null }, { list: cachedMentions(), error: null }, await cachedAgents()]
+          : await Promise.all([freshQueue(), freshMine(), freshMentions(), freshAgents()]);
+        const today = buildToday({
+          viewer: queue.viewer || mine.viewer,
+          queue: queue.prs,
+          done: new Set(listDone().map((d) => d.pr.url)),
+          skipped: getSkipped(),
+          summaries: reviewSummaries(),
+          mine: mine.prs,
+          stages: await stagesFor(mine.prs),
+          mineAside: getMineAside(),
+          mineDone: getMineDone(),
+          mentions: mentions.list,
+          agents: agents.issues ?? undefined,
+        });
+        const error = ('error' in queue && queue.error) || ('error' in mine && mine.error) || null;
+        const times = [queue.fetchedAt, mine.fetchedAt].filter((t): t is string => !!t).sort();
+        // Notifications failing (say, a gh login without the notifications scope) shouldn't make the PRs look stale.
+        const { sessions = {}, local = {} } = await loadConfig();
+        // Which repos get Test on Depot buttons, by the name and label your config gives them.
+        const boxes = Object.fromEntries(Object.entries(sessions).map(([repo, c]) => [repo, { name: c.name ?? null, label: c.label }]));
+        return json({ ...today, fetchedAt: times[0] ?? null, error, mentionsError: mentions.error, agentsError: agents.error, sessions: boxes, local: { repos: Object.keys(local), slot: localSlot() } });
+      }
+      if (pathname === '/api/session') {
+        const url = new URL(req.url).searchParams.get('url') ?? '';
+        return json(await sessionInfo(url));
       }
       if (pathname === '/api/findings') {
         const q = new URL(req.url).searchParams;
@@ -84,8 +177,9 @@ const server = Bun.serve({
       }
       if (pathname === '/api/calibration') {
         const rows = calibration().map((r) => ({ ...r, agrees: agrees(r.lane, r.outcome) }));
-        return json({ rows, gate: GATE });
+        return json({ rows, gate: GATE, findings: findingStats() });
       }
+      if (pathname === '/api/ratings') return json(findingRatings(new URL(req.url).searchParams.get('url') ?? ''));
       if (pathname === '/api/runs') return json(listRuns());
       if (pathname === '/api/live') return json(liveReviews());
       if (pathname === '/api/pr') {
@@ -129,6 +223,66 @@ const server = Bun.serve({
           addImported(url, at);
           cachePR(pr);
           return json({ pr });
+        }
+        if (pathname === '/api/session') {
+          // Test boxes: start adds the PR's label, stop removes it, open reaches a box that's up.
+          // Each one only after a click on Today.
+          const url = String(body.url ?? '');
+          const cfg = await sessionConfig(url);
+          if (!cfg) return json({ error: 'No test box is set up for this repo. Add it under "sessions" in your config.' }, 400);
+          if (body.do === 'start') await setLabel(url, cfg.label, true);
+          else if (body.do === 'stop') stopTunnel(url), await setLabel(url, cfg.label, false);
+          else if (body.do === 'open') {
+            const info = await sessionInfo(url);
+            if (info.state !== 'ready') return json({ error: "The box isn't up yet." }, 409);
+            const checkout = (await loadConfig()).checkouts?.[url.split('/').slice(3, 5).join('/')];
+            const cmd = info.sandbox ? openCommand(cfg, Number(url.split('/').at(-1)), info.sandbox) : null;
+            if (cmd && !checkout) return json({ error: noCheckout(url.split('/').slice(3, 5).join('/')) }, 400);
+            if (cmd && !tunnelRunning(url, info.sandbox)) {
+              startTunnel(url, cmd, info.sandbox!, checkout!);
+              // Give the tunnel a moment to bind before the browser asks for the page.
+              await Bun.sleep(4000);
+            }
+            if (info.appUrl && /^https?:\/\//.test(info.appUrl)) await openInBrowser(info.appUrl);
+          } else return json({ error: 'unknown session action' }, 400);
+          return json(await sessionInfo(url));
+        }
+        if (pathname === '/api/local') {
+          // Run locally: one PR at a time in the clone your config names. Only after a click on Today.
+          if (body.do === 'release') return releaseSlot(), json({ slot: null });
+          const m = String(body.url ?? '').match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
+          const cfg = m && (await loadConfig()).local?.[m[1]];
+          if (!m || !cfg) return json({ error: 'Run locally is not set up for this repo. Add it under "local" in your config.' }, 400);
+          const { holder } = await slotBlockers(body.url, cfg);
+          // Moving the slot stops another PR's server, so the page asks first.
+          if (holder && !body.confirmed) return json({ confirm: `Move the local slot from ${holder.repo}#${holder.number}? Its server will stop.` });
+          try {
+            return json({ slot: { ...(await takeSlot({ url: body.url, repo: m[1], number: Number(m[2]) }, cfg)), running: true } });
+          } catch (e) {
+            return json({ error: (e as Error).message }, 400);
+          }
+        }
+        if (pathname === '/api/agent/start') {
+          // Hands an issue to the agent runner by its ready label, only after Start on Today, and
+          // only while fewer than the cap are queued or in flight.
+          const { agent } = await loadConfig();
+          const url = String(body.url ?? '');
+          const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/\d+$/);
+          if (!agent || !m || !agent.repos.includes(m[1])) return json({ error: 'Not an issue in one of your agent repos.' }, 400);
+          const labels = agentLabels(agent);
+          const { inFlight } = await fetchAgentIssues(agent.repos, labels);
+          if (inFlight >= labels.cap) return json({ error: `${inFlight} of ${labels.cap} agent slots are taken. Land or close one first.` }, 409);
+          await setLabel(url, labels.ready, true);
+          return json({ ok: true, inFlight: inFlight + 1, cap: labels.cap });
+        }
+        if (pathname === '/api/mentions/read') {
+          // Marks a notification read on GitHub, only after you open it or set it aside on Today.
+          const m = cachedMentions().find((x) => x.id === String(body.id ?? ''));
+          if (!m) return json({ error: 'unknown notification' }, 400);
+          if (body.open) await openInBrowser(m.url);
+          await markThreadRead(m.id);
+          saveMentions(cachedMentions().filter((x) => x.id !== m.id));
+          return json({ ok: true });
         }
         if (pathname === '/api/mine/aside') {
           setMineAside(body.url, body.updatedAt ?? null);
@@ -177,6 +331,14 @@ const server = Bun.serve({
         if (pathname === '/api/override') {
           if (body.color && !['green', 'yellow', 'red'].includes(body.color)) return json({ error: 'not a color' }, 400);
           setOverride(body.url, body.color ?? null);
+          return json({ ok: true });
+        }
+        if (pathname === '/api/rate') {
+          // Local only: your useful-or-noise call on a note, for the hit rates on /calibration.
+          if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/.test(body.url)) return json({ error: 'not a PR URL' }, 400);
+          const rating = body.rating === 'useful' || body.rating === 'noise' ? body.rating : null;
+          if (!body.key || !['check', 'taste'].includes(body.source)) return json({ error: 'missing the note' }, 400);
+          rateFinding(body.url, String(body.key), body.source, String(body.category || 'other'), rating);
           return json({ ok: true });
         }
         if (pathname === '/api/review/stop') return json({ stopped: stopReview(String(body.url ?? ''), body.key || undefined) });
@@ -244,7 +406,8 @@ const server = Bun.serve({
         }
       }
       // /pr/<owner>/<repo>/<number> is the in-app PR page; the page reads the rest from the URL.
-      const page = pathname === '/' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
+      if (pathname === '/today') return Response.redirect('/', 301);
+      const page = pathname === '/' ? 'today.html' : pathname === '/queue' ? 'index.html' : pathname === '/mine' ? 'mine.html' : pathname === '/board' ? 'board.html' : pathname === '/calibration' ? 'calibration.html' : /^\/pr\/[^/]+\/[^/]+\/\d+$/.test(pathname) ? 'pr.html' : pathname.replace(/^\/+/, '');
       const file = Bun.file(join(PUBLIC, page));
       if (!file.name!.startsWith(PUBLIC) || !(await file.exists())) return new Response('not found', { status: 404 });
       return new Response(file);
