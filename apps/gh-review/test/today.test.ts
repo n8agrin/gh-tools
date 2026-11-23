@@ -99,7 +99,7 @@ test("an agent's question comes before mentions, and issues to start come last",
   expect(asking).toMatchObject({ tag: 'AGENT', next: 'answer', number: 3, why: '@agent-bot: Should the cache live in sqlite or memory?', since: '2026-11-15T09:00:00Z' });
   expect(t.bands[3].rows).toEqual([]);
   expect(t.bands[4].rows.map((r) => [r.number, r.tag, r.next])).toEqual([[7, 'ISSUE', 'start'], [9, 'ISSUE', 'start']]);
-  expect(t.agents).toEqual({ inFlight: 2, cap: 5 });
+  expect(t.agents).toEqual({ inFlight: 2, cap: 5, working: [] });
   // Without an agent in your config there are no agent bands.
   expect(buildToday(input()).bands.map((b) => b.key)).toEqual(['review', 'move', 'mentions']);
 });

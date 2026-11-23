@@ -73,10 +73,12 @@ export interface Agent {
   blocked?: string;
   /** How many issues may be queued or in flight at once. Start refuses past it. Default 5. */
   cap?: number;
+  /** Where gh-runner keeps its run status files. Default ~/.gh-runner/runs. */
+  runs?: string;
 }
 
 /** The agent labels with their defaults filled in. */
-export const agentLabels = (a: Agent) => ({ ready: a.ready ?? 'agent:ready', working: a.working ?? 'agent:working', blocked: a.blocked ?? 'agent:blocked', cap: a.cap ?? 5 });
+export const agentLabels = (a: Agent) => ({ ready: a.ready ?? 'agent:ready', working: a.working ?? 'agent:working', blocked: a.blocked ?? 'agent:blocked', cap: a.cap ?? 5, runs: expand(a.runs ?? '~/.gh-runner/runs') });
 
 export interface Config {
   /** Where your clone of each repo lives, like {"owner/repo": "~/src/repo"}. Reviews and chats check out worktrees from it. */

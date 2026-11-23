@@ -10,6 +10,7 @@ import { agentLabels, CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageC
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
+import { workingRuns } from './runner';
 import { localSlot, releaseSlot, slotBlockers, takeSlot } from './local';
 import { openCommand, sessionState, startTunnel, stopTunnel, tunnelRunning } from './session';
 
@@ -76,7 +77,7 @@ async function freshAgents() {
   try {
     const issues = { ...(await fetchAgentIssues(agent.repos, labels)), cap: labels.cap };
     setMeta('agentIssues', JSON.stringify(issues));
-    return { issues, error: null };
+    return { issues: { ...issues, working: await workingRuns(labels.runs) }, error: null };
   } catch (e) {
     return { ...(await cachedAgents()), error: `Agent issues: ${(e as Error).message}` };
   }
@@ -85,7 +86,10 @@ async function freshAgents() {
 async function cachedAgents() {
   const { agent } = await loadConfig();
   const raw = agent ? getMeta('agentIssues') : null;
-  return { issues: raw ? JSON.parse(raw) : agent ? { ready: [], asking: [], inFlight: 0, cap: agentLabels(agent).cap } : null, error: null as string | null };
+  if (!agent) return { issues: null, error: null as string | null };
+  const { cap, runs } = agentLabels(agent);
+  // The runner's status files are local, so even the cached view reads them fresh.
+  return { issues: { ...(raw ? JSON.parse(raw) : { ready: [], asking: [], inFlight: 0, cap }), working: await workingRuns(runs) }, error: null as string | null };
 }
 
 /** Notifications that want you. A failure keeps the last good list, with the error. */
