@@ -38,6 +38,46 @@ export interface Check {
   needsInPR?: string;
 }
 
+/** A remote test box per PR that a label starts and a bot comment reports on, like a preview deploy. */
+export interface Session {
+  /** What the buttons call it, as in Test on Depot. Defaults to "a test box". */
+  name?: string;
+  /** The label that starts the box. Removing it stops the box. */
+  label: string;
+  /** Text in the bot's comment once the box is up, and once it has ended. */
+  up: string;
+  ended: string;
+  /** How to reach a box that's up, run in your checkout, with {number} and {sandbox} filled in. Optional. */
+  open?: string[];
+  /** Minutes a box lives, for the "minutes left" hint. Optional. */
+  ttl?: number;
+}
+
+/** The one checkout where Run locally puts a PR, and the command that serves it. */
+export interface Local {
+  /** A clone kept for this, apart from the one you work in, like "~/src/repo-local". */
+  dir: string;
+  /** Started in `dir` after the checkout, left running until the slot moves, like ["bin/dev"]. */
+  start: string[];
+}
+
+/** Labels that hand issues to an agent runner, and how many it may work at once. */
+export interface Agent {
+  /** Repos whose issues assigned to you show as Ready to start. */
+  repos: string[];
+  /** Start adds this label; the runner picks the issue up from it. Default agent:ready. */
+  ready?: string;
+  /** The runner's label while it works. Default agent:working. */
+  working?: string;
+  /** The runner's label when it's waiting on an answer from you. Default agent:blocked. */
+  blocked?: string;
+  /** How many issues may be queued or in flight at once. Start refuses past it. Default 5. */
+  cap?: number;
+}
+
+/** The agent labels with their defaults filled in. */
+export const agentLabels = (a: Agent) => ({ ready: a.ready ?? 'agent:ready', working: a.working ?? 'agent:working', blocked: a.blocked ?? 'agent:blocked', cap: a.cap ?? 5 });
+
 export interface Config {
   /** Where your clone of each repo lives, like {"owner/repo": "~/src/repo"}. Reviews and chats check out worktrees from it. */
   checkouts: Record<string, string>;
@@ -54,6 +94,12 @@ export interface Config {
   red?: RedPath[];
   /** Per-PR commands bound to Shift plus a key. */
   actions?: Action[];
+  /** Test boxes per repo, like {"owner/repo": {"label": "preview", ...}}. Adds Test on Depot to Today. */
+  sessions?: Record<string, Session>;
+  /** Run locally per repo, like {"owner/repo": {"dir": "~/src/repo-local", "start": ["bin/dev"]}}. One PR at a time. */
+  local?: Record<string, Local>;
+  /** Issues you hand to an agent from Today. */
+  agent?: Agent;
 }
 
 export const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());

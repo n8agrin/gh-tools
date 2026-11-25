@@ -59,6 +59,9 @@ test('a submitted Copilot review counts as a bug pass', async () => {
   expect(hasCopilotReview([{ author: { login: 'Copilot-Pull-Request-Reviewer[bot]' }, state: 'COMMENTED' }])).toBe(true);
   expect(hasCopilotReview([{ author: { login: 'copilot-pull-request-reviewer' }, state: 'PENDING' }])).toBe(false);
   expect(hasCopilotReview([{ author: { login: 'n8agrin' }, state: 'APPROVED' }])).toBe(false);
+  const quota = { author: { login: 'copilot-pull-request-reviewer' }, state: 'COMMENTED', body: 'Copilot was unable to review this pull request because the user who requested the review has insufficient remaining quota.' };
+  expect(hasCopilotReview([quota])).toBe(false);
+  expect(hasCopilotReview([quota, { author: { login: 'copilot-pull-request-reviewer' }, state: 'COMMENTED', body: 'Changes recommended' }])).toBe(true);
 });
 
 test('reads a PR to import from a link, owner/repo#n, or a bare number', async () => {

@@ -1,6 +1,8 @@
 {
   "type": "object",
   "properties": {
+    "verdict": { "type": "string", "enum": ["safe", "careful", "dangerous"] },
+    "verdict_why": { "type": "string" },
     "findings": {
       "type": "array",
       "items": {
@@ -16,7 +18,8 @@
         },
         "required": ["file", "lines", "kind", "category", "color", "note", "scenario"]
       }
-    }
+    },
+    "already_said": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["findings"]
+  "required": ["verdict", "verdict_why", "findings", "already_said"]
 }

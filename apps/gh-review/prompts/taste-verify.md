@@ -10,6 +10,8 @@ e. Would the suggested fix work as stated? The shared code needs a sensible home
 f. Does the question follow from all of the above?
 g. If the finding has an example, is it right? Its before must match the PR's code at those lines, and its after must do what the question suggests and still work (names in scope, signatures that match). A wrong example misleads more than no example, so set drop_example when it fails and the rest of the finding holds. A reworded question that no longer fits the example also gets drop_example.
 
+A finding from the Simpler lens has no prior art to compare: check instead that its after does the same thing as the PR's code for every input the callers pass, and that it really is simpler to read and change, not just shorter. Drop it when either fails.
+
 Two kinds of finding need a different reading:
 
 - A Rule: link cites a written rule (a CLAUDE.md, README or CONTRIBUTING line, or CODEOWNERS). Check that the rule says what the finding claims and applies to this code. A written rule that applies outranks a sibling count, so c doesn't apply to it.

@@ -363,9 +363,9 @@ async function fetchLinkedIssues(repo: string, number: number): Promise<LinkedIs
   }
 }
 
-/** A submitted review by Copilot, whatever the exact bot login is. Pending requests don't count. */
-export const hasCopilotReview = (reviews: { author?: { login?: string } | null; state?: string }[]) =>
-  reviews.some((r) => /copilot/i.test(r.author?.login ?? '') && r.state !== 'PENDING');
+/** A submitted review by Copilot, whatever the exact bot login is. Pending requests don't count, and nor does Copilot saying it couldn't review (out of quota, too large). */
+export const hasCopilotReview = (reviews: { author?: { login?: string } | null; state?: string; body?: string }[]) =>
+  reviews.some((r) => /copilot/i.test(r.author?.login ?? '') && r.state !== 'PENDING' && !/\b(was )?unable to review\b/i.test(r.body ?? ''));
 
 export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
 export interface LineComment {
@@ -495,4 +495,125 @@ export async function fetchPR(url: string): Promise<PRDetail> {
     state: n.state,
     linkedIssues,
   };
+}
+
+/** A GitHub notification that wants you: an @-mention, a reply on a thread you're in, an assignment. */
+export interface Mention {
+  /** The notification thread's id, which marking it read needs. */
+  id: string;
+  reason: string;
+  repo: string;
+  title: string;
+  /** PullRequest, Issue, Discussion and so on. */
+  kind: string;
+  /** The page to open on github.com. */
+  url: string;
+  updatedAt: string;
+}
+
+/** Review requests are the review queue's, and CI, state changes and subscriptions are noise. */
+const MENTION_REASONS = new Set(['mention', 'team_mention', 'comment', 'assign']);
+
+/** Exported for tests: one notification as a row, or null for a reason Today leaves out. */
+export function toMention(n: any): Mention | null {
+  if (!MENTION_REASONS.has(n?.reason)) return null;
+  const repo: string = n.repository?.full_name ?? '';
+  const api: string = n.subject?.url ?? '';
+  const m = api.match(/^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/]+)\/(pulls|issues)\/(\d+)$/);
+  const url = m ? `https://github.com/${m[1]}/${m[2] === 'pulls' ? 'pull' : 'issues'}/${m[3]}` : (n.repository?.html_url ?? `https://github.com/${repo}`);
+  return { id: String(n.id), reason: n.reason, repo, title: n.subject?.title ?? '', kind: n.subject?.type ?? '', url, updatedAt: n.updated_at };
+}
+
+/** Your unread notifications that want you. Only Today reads these. */
+export async function fetchMentions(): Promise<Mention[]> {
+  const fixture = process.env.GH_REVIEW_NOTIFICATIONS_FIXTURE;
+  const raw: any[] = fixture
+    ? await Bun.file(fixture).json()
+    : (await gh(['api', '--paginate', 'notifications?participating=true&per_page=50', '--jq', '.[] | tojson'])).split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  return raw.map(toMention).filter((m): m is Mention => !!m);
+}
+
+/** Marks one notification read, after you open it or set it aside on Today. It touches only your inbox. */
+export async function markThreadRead(id: string): Promise<void> {
+  if (!/^\d+$/.test(id)) throw new Error(`not a notification id: ${id}`);
+  await gh(['api', '-X', 'PATCH', `notifications/threads/${id}`]);
+}
+
+const ISSUE_OF = (url: string) => {
+  const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/(\d+)$/);
+  if (!m) throw new Error(`not a PR or issue URL: ${url}`);
+  return { repo: m[1], number: m[2] };
+};
+
+/** A PR's labels right now, and the newest comment whose body contains any of `needles`. Read only. */
+export async function fetchLabelsAndComment(url: string, needles: string[]): Promise<{ labels: string[]; comment: { body: string; at: string } | null }> {
+  const { repo, number } = ISSUE_OF(url);
+  const [labels, comments] = await Promise.all([
+    gh(['api', `repos/${repo}/issues/${number}/labels`, '--jq', '.[].name']).then((o) => o.split('\n').filter(Boolean)),
+    gh(['api', '--paginate', `repos/${repo}/issues/${number}/comments?per_page=100`, '--jq', '.[] | {body, at: .updated_at} | tojson']).then((o) => o.split('\n').filter(Boolean).map((l) => JSON.parse(l) as { body: string; at: string })),
+  ]);
+  const hit = comments.filter((c) => needles.some((n) => c.body?.includes(n))).sort((a, b) => a.at.localeCompare(b.at)).at(-1) ?? null;
+  return { labels, comment: hit };
+}
+
+/** Adds or removes one label on a PR or issue. Only a click on Today (Test on Depot, Start agent) calls this. */
+export async function setLabel(url: string, label: string, on: boolean): Promise<void> {
+  const { repo, number } = ISSUE_OF(url);
+  if (!label.trim()) throw new Error('no label');
+  if (on) {
+    const proc = Bun.spawn(['gh', 'api', '-X', 'POST', `repos/${repo}/issues/${number}/labels`, '--input', '-'], { stdin: new Blob([JSON.stringify({ labels: [label] })]), stdout: 'pipe', stderr: 'pipe' });
+    const [err, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) throw new Error(err.trim() || `gh exited ${code}`);
+    return;
+  }
+  // Removing a label that's already gone is fine: the box is off either way.
+  await gh(['api', '-X', 'DELETE', `repos/${repo}/issues/${number}/labels/${encodeURIComponent(label)}`]).catch((e) => {
+    if (!/404|Label does not exist/.test(e.message)) throw e;
+  });
+}
+
+/** An issue for the agent rows on Today. */
+export interface AgentIssue {
+  url: string;
+  repo: string;
+  number: number;
+  title: string;
+  labels: string[];
+  updatedAt: string;
+  /** The newest comment, which on an issue the agent is blocked on is its question. */
+  lastComment: { author: string; body: string; at: string; url: string } | null;
+}
+
+const ISSUE_QUERY = `
+query($q: String!) {
+  search(type: ISSUE, query: $q, first: 50) {
+    issueCount
+    nodes { ... on Issue { url number title updatedAt repository { nameWithOwner } labels(first: 20) { nodes { name } } comments(last: 1) { nodes { author { login } body updatedAt url } } } }
+  }
+}`;
+
+/** Exported for tests: one search node as an AgentIssue. */
+export function toAgentIssue(n: any): AgentIssue {
+  const c = n.comments?.nodes?.[0];
+  return {
+    url: n.url,
+    repo: n.repository?.nameWithOwner ?? '',
+    number: n.number,
+    title: n.title ?? '',
+    labels: (n.labels?.nodes ?? []).map((l: any) => l.name),
+    updatedAt: n.updatedAt,
+    lastComment: c ? { author: c.author?.login ?? 'ghost', body: c.body ?? '', at: c.updatedAt, url: c.url } : null,
+  };
+}
+
+/** Your open issues in the agent repos: ones with no agent label yet, ones an agent is asking you about, and how many are queued or in flight. */
+export async function fetchAgentIssues(repos: string[], labels: { ready: string; working: string; blocked: string }): Promise<{ ready: AgentIssue[]; asking: AgentIssue[]; inFlight: number }> {
+  const fixture = process.env.GH_REVIEW_AGENT_FIXTURE;
+  if (fixture) return Bun.file(fixture).json();
+  if (!repos.length) return { ready: [], asking: [], inFlight: 0 };
+  const scope = `is:issue is:open archived:false assignee:@me ${repos.map((r) => `repo:${r}`).join(' ')}`;
+  const q = (extra: string) => gh(['api', 'graphql', '-f', `query=${ISSUE_QUERY}`, '-f', `q=${scope} ${extra}`]).then((o) => JSON.parse(o).data.search);
+  const not = [labels.ready, labels.working, labels.blocked].map((l) => `-label:"${l}"`).join(' ');
+  const [ready, asking, flight] = await Promise.all([q(`${not} sort:created-asc`), q(`label:"${labels.blocked}" sort:updated-asc`), q(`label:"${labels.ready}","${labels.working}","${labels.blocked}"`)]);
+  return { ready: ready.nodes.filter((n: any) => n?.number).map(toAgentIssue), asking: asking.nodes.filter((n: any) => n?.number).map(toAgentIssue), inFlight: flight.issueCount };
 }
