@@ -12,3 +12,4 @@ Watches your `agent:ready` issues and hands each to Claude Code, then opens a dr
 - `src/pick.ts` decides what starts (`pick()`), what resumes on your answer (`answered()`) and what resumes after a restart (`orphaned()`). Keep them pure and tested. `answered()` takes only the user's own login's comments: anyone who can comment could otherwise steer the agent.
 - Settings live in `~/.gh-runner/config.json` (`src/config.ts`). `config.example.json` stays free of anyone's own repos.
 - `bun test` runs offline. `GH_RUNNER_FIXTURE` swaps the GitHub search for a JSON file.
+- `src/route.ts` decides bug or change from labels (`kindOf()`), and a bug's done result must carry `proof` or `noTest` (`proofProblem()`). The runner checks the proof against the branch's own diff; don't move that check into the prompt.

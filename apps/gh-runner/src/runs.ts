@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HOME } from './config';
+import type { Kind } from './route';
 
 export type RunState = 'working' | 'blocked' | 'done' | 'failed';
 
@@ -24,6 +25,8 @@ export interface Run {
   updatedAt: string;
   /** One line on where it is: the agent's question, why it stopped, or its summary. */
   note: string;
+  /** Bug or change, decided when the run first starts and kept across resumes. Absent on runs from before Route. */
+  kind?: Kind;
 }
 
 export const RUNS = join(HOME, 'runs');
