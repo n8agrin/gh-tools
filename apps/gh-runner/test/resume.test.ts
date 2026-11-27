@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { MARK, type Issue } from '../src/github';
-import { answered, orphaned } from '../src/pick';
+import { answered, orphaned, sweepable } from '../src/pick';
 import type { Run } from '../src/runs';
 
 const issue = (n: number, lastComment: Issue['lastComment'] = null): Issue => ({ url: `https://github.com/a/b/issues/${n}`, repo: 'a/b', number: n, title: 't', labels: [], createdAt: 'c', lastComment });
@@ -26,4 +26,12 @@ test('a working issue whose process is gone gets picked up again', () => {
   const working = [issue(1), issue(2), issue(3), issue(4), issue(9)];
   expect(orphaned(working, runs, new Set(), (pid) => pid === 222).map((i) => i.number)).toEqual([1, 3]);
   expect(orphaned(working, runs, new Set([issue(1).url]), () => false).map((i) => i.number)).toEqual([2, 3]);
+});
+
+test('only done runs with a PR and a worktree still on disk get checked for cleanup', () => {
+  const runs = [run(1, 'done'), run(2, 'done'), run(3, 'blocked'), run(4, 'done')].map(([, r]) => r);
+  runs[1].pr = null;
+  runs[0].pr = runs[3].pr = 'https://github.com/a/b/pull/1';
+  runs[3].worktree = 'gone';
+  expect(sweepable(runs, (p) => p !== 'gone').map((r) => r.number)).toEqual([1]);
 });

@@ -45,3 +45,5 @@ Reply on a blocked issue and the runner picks the same Claude session back up wi
 If the runner stops mid-run (a restart, the laptop sleeping), the next start finds issues still labeled `agent:working` whose process is gone and resumes each session where it left off.
 
 Each run's status, transcript and result are in `~/.gh-runner/runs/<owner>__<repo>__<number>/`.
+
+Once an hour the runner looks at finished runs and removes the worktree of any whose PR has merged or closed, since each can hold gigabytes. A worktree with uncommitted changes is left alone, and the branch stays, so starting the issue again checks it back out.
