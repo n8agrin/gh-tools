@@ -3,11 +3,12 @@
 import { join } from 'node:path';
 import { listRuns, loadActions, startAction } from './actions';
 import { ask, chatState, reset, stop } from './chat';
-import { addImported, cachedMentions, saveMentions, getMeta, setMeta, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
+import { addImported, cachedMentions, saveMentions, getMeta, setMeta, cachePR, cachedMine, cachedPR, cachedQueue, getMineAside, getMineDone, getOverrides, getSkipped, listDone, listImported, markDone, recordOutcome, calibration, agrees, rateFinding, findingRatings, findingStats, reviewSummaries, saveMine, saveQueue, setMineAside, setMineDone, typicalStepSeconds, liveReviews, markInterrupted, reviewHeads, saveReviewed, setOverride, setSkipped, unmarkDone, viewer } from './db';
 import { findingsReview, loadFindings, saveFindings } from './findings';
 import { createIssue, fetchComments, fetchDiff, fetchFile, fetchImported, fetchMine, fetchPR, fetchViewer, fetchMentions, fetchAgentIssues, fetchLabelsAndComment, markThreadRead, setLabel, reviewPayload, submitReview, fetchQueue, parsePRRef, type MyPR } from './github';
 import { agentLabels, CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageConfig } from './config';
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
+import { autoLimits, autoPick, headKey, startedOn } from './auto';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
 import { workingRuns } from './runner';
@@ -422,4 +423,36 @@ const server = Bun.serve({
 });
 
 console.log(`gh-review on http://localhost:${server.port}`);
+
+/** One look for review requests that have no run on their current head, when your config turns `auto` on. */
+async function autoReview() {
+  const { auto, checkouts } = await loadConfig();
+  if (!auto) return;
+  const limits = autoLimits(auto);
+  const q = await freshQueue();
+  // A stale list could name PRs that have since merged or moved on, so a failed fetch waits for the next look.
+  if ('error' in q) return;
+  const day = new Date().toLocaleDateString('en-CA');
+  let n = startedOn(day, getMeta('autoStarted'));
+  const { heads, running } = reviewHeads();
+  // Hidden the way the queue page hides them: set aside until the PR changes, done until you're asked again.
+  const skipped = getSkipped();
+  const doneAt = new Map(listDone().map((d) => [d.pr.url, d.doneAt]));
+  const hidden = new Set(q.prs.filter((p) => (skipped[p.url] ?? '') >= p.updatedAt || (doneAt.get(p.url) ?? '') >= p.requestedAt).map((p) => p.url));
+  const state = { repos: new Set(Object.keys(checkouts ?? {})), seen: new Set(heads.map((h) => headKey(h.url, h.headSha))), hidden, running, startedToday: n };
+  for (const pr of autoPick(q.prs, state, limits)) {
+    await startReview(pr.url, []);
+    setMeta('autoStarted', JSON.stringify({ day, n: ++n }));
+    console.log(`auto review ${n} of ${limits.perDay} today: ${pr.repo}#${pr.number}`);
+  }
+}
+
+// The config is read on each look, so turning `auto` on or off needs no restart.
+(async () => {
+  while (true) {
+    await autoReview().catch((e) => console.error(`auto review: ${(e as Error).message}`));
+    await Bun.sleep(autoLimits((await loadConfig().catch(() => null))?.auto ?? {}).everyMinutes * 60_000);
+  }
+})();
+
 if (configFile() === EXAMPLE) console.log(`No ${CONFIG}, so this runs on config.example.json. Copy it there and add your repos.`);
