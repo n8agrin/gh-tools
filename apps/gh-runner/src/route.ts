@@ -17,7 +17,7 @@ export const BUG_RULES = `
 1. Reproduce it first. If you can't, stop with status "blocked" and ask for what you'd need.
 2. Write a test that fails because of the bug, before you touch the fix. Run it, keep the failing output, and commit the test on its own.
 3. Fix the bug. Run the same command again and keep the passing output.
-4. Put both runs in the result file as "proof": {"test": "path/to/the.test.file", "command": "the exact command", "red": "the last lines of the failing run", "green": "the last lines of the passing run"}.
+4. Put both runs in the result file as "proof": {"test": "the test file, as a path from the repo root", "command": "the exact command", "red": "the last lines of the failing run", "green": "the last lines of the passing run"}.
 
 If no test can show this bug (a visual glitch with no test surface, say), leave "proof" out and set "noTest" to one sentence on why. Never weaken or delete an existing test to get to green.
 `;
