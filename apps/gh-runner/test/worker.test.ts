@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { settle } from '../src/config';
 import { parseResult } from '../src/result';
-import { branchFor, claudeArgs, fill, resultComment } from '../src/worker';
+import { branchFor, claudeArgs, fill, resultComment, sessionStarted } from '../src/worker';
 
 test('branchFor makes a short readable branch from the issue', () => {
   expect(branchFor('agent/', { number: 12, title: 'Export button does nothing on Safari!' })).toBe('agent/12-export-button-does-nothing-on-safari');
@@ -48,4 +48,14 @@ test('a done PR description carries the result for gh-review to read back, even 
   expect(body.split('\n').pop()!.match(/--/g)?.length).toBe(2);
   expect(decodeResult(body)).toEqual(r);
   expect(decodeResult(prBody({ repo: 'a/b', number: 4 }, null))).toBeNull();
+});
+
+test('a session counts as started only once claude logged its init line for it', () => {
+  const init = (id: string) => JSON.stringify({ type: 'system', subtype: 'init', session_id: id });
+  const hook = JSON.stringify({ type: 'system', subtype: 'hook_started', session_id: 's1' });
+  const failed = JSON.stringify({ type: 'result', subtype: 'error_during_execution', session_id: 's1' });
+  expect(sessionStarted('', 's1')).toBe(false);
+  expect(sessionStarted([hook, failed].join('\n'), 's1')).toBe(false);
+  expect(sessionStarted([init('s0'), hook].join('\n'), 's1')).toBe(false);
+  expect(sessionStarted([hook, init('s1')].join('\n'), 's1')).toBe(true);
 });

@@ -45,8 +45,9 @@ export interface Band {
 
 export interface Today {
   bands: Band[];
-  /** Not rows, just counts: your PRs waiting on others, ones with no bug pass yet, and rows you set aside or marked done. */
-  counts: { waiting: number; hunt: number; hidden: number };
+  /** Not rows, just counts: your PRs waiting on others, ones with no bug pass yet, rows you set aside or marked done,
+   * and unread mentions of a team you're on, which are rarely yours alone and would bury the rest. */
+  counts: { waiting: number; hunt: number; hidden: number; teamMentions: number };
   /** Issues queued for or held by an agent, against the cap, when your config hands issues to one. `answered` are
    * blocked issues whose last comment is your reply, waiting for the runner to pick them back up. */
   agents: { inFlight: number; cap: number; working: AgentRun[]; answered: Pick<TodayRow, 'url' | 'repo' | 'number' | 'title'>[] } | null;
@@ -144,8 +145,9 @@ export function buildToday(i: TodayInput): Today {
 
   // A mention on something that already has a row above is the same thing to do, so it doesn't get a second row.
   const shown = new Set([...review, ...move, ...asking, ...start].map((r) => r.url));
+  const teamMentions = (i.mentions ?? []).filter((m) => m.reason === 'team_mention' && !shown.has(m.url)).length;
   const mentions: TodayRow[] = (i.mentions ?? [])
-    .filter((m) => !shown.has(m.url))
+    .filter((m) => !shown.has(m.url) && m.reason !== 'team_mention')
     .map((m) => {
       const n = m.url.match(/\/(?:pull|issues)\/(\d+)$/);
       return { url: m.url, repo: m.repo, number: n ? Number(n[1]) : null, title: m.title, tag: m.reason === 'assign' ? 'ASSIGNED' : 'MENTION', since: m.updatedAt, why: WHY[m.reason] ?? '', next: 'thread' as Next, mine: false, updatedAt: m.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, labels: [], thread: m.id };
@@ -165,6 +167,7 @@ export function buildToday(i: TodayInput): Today {
       waiting: open.filter((p) => stage(p)?.key === 'waiting').length,
       hunt: open.filter((p) => stage(p)?.key === 'hunt').length,
       hidden: i.mine.length - open.length + i.queue.filter((p) => !i.done.has(p.url) && i.skipped[p.url] && i.skipped[p.url] >= p.updatedAt).length,
+      teamMentions,
     },
   };
 }

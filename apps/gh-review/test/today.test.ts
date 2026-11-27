@@ -69,7 +69,7 @@ test('your PRs that need you come closest-to-landing first; the rest are counts'
   expect(urls(move)).toEqual([4, 3, 5, 2, 1]);
   expect(move.map((r) => r.tag)).toEqual(['SHIP', 'SHIP', 'UNDRAFT', 'FINDINGS', 'BLOCKED']);
   expect(move[3]).toMatchObject({ next: 'findings', findings: 2, mine: true });
-  expect(t.counts).toEqual({ waiting: 1, hunt: 1, hidden: 1 });
+  expect(t.counts).toEqual({ waiting: 1, hunt: 1, hidden: 1, teamMentions: 0 });
 });
 
 test('mentions come oldest first, and a mention on a PR already above gets no second row', async () => {
@@ -83,10 +83,11 @@ test('mentions come oldest first, and a mention on a PR already above gets no se
   expect(mentions[2].url).toBe('https://github.com/acme/docs');
 
   const queue = [pr(63120, { url: 'https://github.com/acme/app/pull/63120', repo: 'acme/app' })];
-  const rows = buildToday(input({ queue, mentions })).bands[2].rows;
-  expect(rows.map((r) => r.thread)).toEqual(['105', '102']);
-  expect(rows[0]).toMatchObject({ number: null, tag: 'MENTION', next: 'thread', why: 'A team of yours was @-mentioned.' });
-  expect(rows[1]).toMatchObject({ number: 63140, why: "New comments on a thread you're in." });
+  const t = buildToday(input({ queue, mentions }));
+  // A team mention is only counted, since a busy team's would bury the rest.
+  expect(t.bands[2].rows.map((r) => r.thread)).toEqual(['102']);
+  expect(t.bands[2].rows[0]).toMatchObject({ number: 63140, tag: 'MENTION', next: 'thread', why: "New comments on a thread you're in." });
+  expect(t.counts.teamMentions).toBe(1);
 });
 
 test("an agent's question comes before mentions, and issues to start come last", async () => {

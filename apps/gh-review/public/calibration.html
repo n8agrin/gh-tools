@@ -16,7 +16,12 @@
 <body class="mine calib">
   <header>
     <span class="count"><b>Calibration</b></span>
-    <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+    <nav class="views" aria-label="Views">
+      <a class="ghost" href="/" title="Everything that needs you, in one list">Today</a>
+      <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+      <a class="ghost" href="/mine" title="Your own open PRs  m">My PRs</a>
+      <a class="ghost" href="/board" title="Your PRs by stage  b">Board</a>
+    </nav>
   </header>
   <main id="calib" aria-label="how often each lane matched what you did"></main>
   <script src="/calibration.js" type="module"></script>
