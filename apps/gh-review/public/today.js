@@ -145,6 +145,7 @@ function renderList() {
     c.teamMentions ? `<a href="https://github.com/notifications?query=reason%3Ateam-mention" target="_blank" rel="noopener">${plural(c.teamMentions, 'team mention')} on GitHub</a>` : '',
     // Agents at work aren't yours to act on yet, so they're links here, not rows: the draft PR once there is one.
     ...(state.agents?.working ?? []).map((w) => `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(w.repo.split('/')[1])}#${w.number}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`),
+    ...(state.agents?.answered ?? []).map((a) => `<a href="${esc(a.url)}" target="_blank" rel="noopener" title="${esc(a.title)}">You answered ${esc(ref(a))}, the agent picks it up next</a>`),
   ].filter(Boolean);
   main.innerHTML = `<div class="wrap">${bands}${foot.length ? `<div class="foot">${foot.join('')}</div>` : ''}</div>`;
 }

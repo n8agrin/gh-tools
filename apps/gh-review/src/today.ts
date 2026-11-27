@@ -48,8 +48,9 @@ export interface Today {
   /** Not rows, just counts: your PRs waiting on others, ones with no bug pass yet, rows you set aside or marked done,
    * and unread mentions of a team you're on, which are rarely yours alone and would bury the rest. */
   counts: { waiting: number; hunt: number; hidden: number; teamMentions: number };
-  /** Issues queued for or held by an agent, against the cap, when your config hands issues to one. */
-  agents: { inFlight: number; cap: number; working: AgentRun[] } | null;
+  /** Issues queued for or held by an agent, against the cap, when your config hands issues to one. `answered` are
+   * blocked issues whose last comment is your reply, waiting for the runner to pick them back up. */
+  agents: { inFlight: number; cap: number; working: AgentRun[]; answered: Pick<TodayRow, 'url' | 'repo' | 'number' | 'title'>[] } | null;
 }
 
 export interface TodayInput {
@@ -93,6 +94,16 @@ const firstLine = (body: string) => {
   return line.length > 200 ? `${line.slice(0, 199)}…` : line;
 };
 
+/** gh-runner ends every comment it writes with this, since on GitHub those comments are yours too. */
+const RUNNER_MARK = '<!-- gh-runner -->';
+
+/** What a blocked issue's last comment asks, without markdown bold and without naming you as the asker. */
+function question(c: AgentIssue['lastComment']): string {
+  if (!c) return 'The agent is waiting on you. Its question is on the issue.';
+  const line = firstLine(c.body.replace(/\*\*/g, ''));
+  return c.body.includes(RUNNER_MARK) ? line : `@${c.author}: ${line}`;
+}
+
 const WHY: Record<string, string> = {
   mention: 'You were @-mentioned.',
   team_mention: 'A team of yours was @-mentioned.',
@@ -125,10 +136,11 @@ export function buildToday(i: TodayInput): Today {
     .map((x) => x.row);
 
   const issueRow = (x: AgentIssue, o: Pick<TodayRow, 'tag' | 'why' | 'next' | 'since'>): TodayRow => ({ url: x.url, repo: x.repo, number: x.number, title: x.title, mine: false, updatedAt: x.updatedAt, headSha: '', lane: null, decisions: [], findings: 0, labels: x.labels, ...o });
-  // The agent's question is its last comment; its first line is enough to know what it's asking.
-  const asking = (i.agents?.asking ?? []).map((x) =>
-    issueRow(x, { tag: 'AGENT', next: 'answer', since: x.lastComment?.at ?? x.updatedAt, why: x.lastComment ? `@${x.lastComment.author}: ${firstLine(x.lastComment.body)}` : 'The agent is waiting on you. Its question is on the issue.' }),
-  );
+  // The agent's question is its last comment; its first line is enough to know what it's asking. Once the last
+  // comment is your own reply, the ball is back with the agent, so the issue leaves the band.
+  const blocked = i.agents?.asking ?? [];
+  const yours = (x: AgentIssue) => x.lastComment?.author === i.viewer && !x.lastComment.body.includes(RUNNER_MARK);
+  const asking = blocked.filter((x) => !yours(x)).map((x) => issueRow(x, { tag: 'AGENT', next: 'answer', since: x.lastComment?.at ?? x.updatedAt, why: question(x.lastComment) }));
   const start = (i.agents?.ready ?? []).map((x) => issueRow(x, { tag: 'ISSUE', next: 'start', since: x.updatedAt, why: 'Assigned to you, no agent on it yet.' }));
 
   // A mention on something that already has a row above is the same thing to do, so it doesn't get a second row.
@@ -150,7 +162,7 @@ export function buildToday(i: TodayInput): Today {
       { key: 'mentions', label: 'Mentions and replies', rows: mentions },
       ...(i.agents ? [{ key: 'start' as const, label: 'Ready to start', rows: start }] : []),
     ],
-    agents: i.agents ? { inFlight: i.agents.inFlight, cap: i.agents.cap, working: i.agents.working ?? [] } : null,
+    agents: i.agents ? { inFlight: i.agents.inFlight, cap: i.agents.cap, working: i.agents.working ?? [], answered: blocked.filter(yours).map(({ url, repo, number, title }) => ({ url, repo, number, title })) } : null,
     counts: {
       waiting: open.filter((p) => stage(p)?.key === 'waiting').length,
       hunt: open.filter((p) => stage(p)?.key === 'hunt').length,

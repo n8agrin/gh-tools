@@ -100,7 +100,15 @@ test("an agent's question comes before mentions, and issues to start come last",
   expect(asking).toMatchObject({ tag: 'AGENT', next: 'answer', number: 3, why: '@agent-bot: Should the cache live in sqlite or memory?', since: '2026-11-15T09:00:00Z' });
   expect(t.bands[3].rows).toEqual([]);
   expect(t.bands[4].rows.map((r) => [r.number, r.tag, r.next])).toEqual([[7, 'ISSUE', 'start'], [9, 'ISSUE', 'start']]);
-  expect(t.agents).toEqual({ inFlight: 2, cap: 5, working: [] });
+  expect(t.agents).toEqual({ inFlight: 2, cap: 5, working: [], answered: [] });
   // Without an agent in your config there are no agent bands.
   expect(buildToday(input()).bands.map((b) => b.key)).toEqual(['review', 'move', 'mentions']);
+});
+
+test('a question gh-runner asked reads plainly, and your answer takes it off the band', () => {
+  const issue = (n: number, author: string, body: string) => ({ url: `https://github.com/a/b/issues/${n}`, repo: 'a/b', number: n, title: `Issue ${n}`, labels: ['agent:blocked'], updatedAt: '2026-11-15T00:00:00Z', lastComment: { author, body, at: '2026-11-15T09:00:00Z', url: '' } });
+  const asking = [issue(1, 'me', '**Question:** Which flag?\n\nMore.\n\n<!-- gh-runner -->\n'), issue(2, 'me', 'The old one.'), issue(3, 'pat', 'What about tests?')];
+  const t = buildToday(input({ agents: { ready: [], asking, inFlight: 3, cap: 5 } as any }));
+  expect(t.bands.find((b) => b.key === 'agents')!.rows.map((r) => [r.number, r.why])).toEqual([[1, 'Question: Which flag?'], [3, '@pat: What about tests?']]);
+  expect(t.agents!.answered).toEqual([{ url: 'https://github.com/a/b/issues/2', repo: 'a/b', number: 2, title: 'Issue 2' }]);
 });
