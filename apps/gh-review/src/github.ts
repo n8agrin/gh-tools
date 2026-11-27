@@ -613,7 +613,8 @@ export async function fetchAgentIssues(repos: string[], labels: { ready: string;
   if (!repos.length) return { ready: [], asking: [], inFlight: 0 };
   const scope = `is:issue is:open archived:false assignee:@me ${repos.map((r) => `repo:${r}`).join(' ')}`;
   const q = (extra: string) => gh(['api', 'graphql', '-f', `query=${ISSUE_QUERY}`, '-f', `q=${scope} ${extra}`]).then((o) => JSON.parse(o).data.search);
+  // An issue with a PR that will close it is already being worked, like one an agent finished and unlabeled.
   const not = [labels.ready, labels.working, labels.blocked].map((l) => `-label:"${l}"`).join(' ');
-  const [ready, asking, flight] = await Promise.all([q(`${not} sort:created-asc`), q(`label:"${labels.blocked}" sort:updated-asc`), q(`label:"${labels.ready}","${labels.working}","${labels.blocked}"`)]);
+  const [ready, asking, flight] = await Promise.all([q(`${not} -linked:pr sort:created-asc`), q(`label:"${labels.blocked}" sort:updated-asc`), q(`label:"${labels.ready}","${labels.working}","${labels.blocked}"`)]);
   return { ready: ready.nodes.filter((n: any) => n?.number).map(toAgentIssue), asking: asking.nodes.filter((n: any) => n?.number).map(toAgentIssue), inFlight: flight.issueCount };
 }
