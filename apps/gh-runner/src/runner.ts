@@ -3,10 +3,11 @@
 //   bun src/runner.ts --once      look once, wait for what it started, and exit
 //   --dry-run                     say what it would start, and change nothing
 import { loadConfig } from './config';
-import { fetchQueue, moveLabel, viewer, type Issue } from './github';
-import { answered, orphaned, pick } from './pick';
+import { existsSync } from 'node:fs';
+import { fetchQueue, moveLabel, prState, viewer, type Issue } from './github';
+import { answered, orphaned, pick, sweepable } from './pick';
 import { listRuns } from './runs';
-import { work, type Begin } from './worker';
+import { removeWorktree, work, type Begin } from './worker';
 
 const args = new Set(process.argv.slice(2));
 const once = args.has('--once');
@@ -25,6 +26,21 @@ const alive = (pid: number) => {
 };
 
 const RESTARTED = 'The runner stopped while you were working (a restart or the machine slept). Check `git status` and the last commits, then carry on where you left off.';
+
+/** Once an hour, removes the worktrees of done runs whose PR has merged or closed, since each can hold gigabytes. */
+let swept = 0;
+async function sweep(s: Awaited<ReturnType<typeof loadConfig>>) {
+  if (dryRun || Date.now() - swept < 3600_000) return;
+  swept = Date.now();
+  for (const r of sweepable(await listRuns(), existsSync)) {
+    const state = await prState(r.pr!).catch(() => 'OPEN');
+    if (state === 'OPEN') continue;
+    await removeWorktree(s, r).then(
+      () => log(`${r.repo}#${r.number}: PR ${state.toLowerCase()}, removed ${r.worktree}`),
+      (e) => log(`${r.repo}#${r.number}: left ${r.worktree} in place, ${(e as Error).message}`),
+    );
+  }
+}
 
 async function tick() {
   const s = await loadConfig();
@@ -47,6 +63,7 @@ async function tick() {
   for (const issue of lost) await go(issue, null, { resume: true, message: RESTARTED }, 'pick up');
   for (const { issue, answer } of answers) await go(issue, s.blocked, { resume: true, message: `Your question on the issue was answered:\n\n${answer}\n\nCarry on with that.` }, 'resume');
   for (const issue of next) await go(issue, s.ready, { resume: false }, 'start');
+  await sweep(s);
 }
 
 while (true) {

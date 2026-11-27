@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { MARK, type Issue } from '../src/github';
-import { answered, orphaned } from '../src/pick';
+import { answered, orphaned, sweepable } from '../src/pick';
 import type { Run } from '../src/runs';
 
 const issue = (n: number, lastComment: Issue['lastComment'] = null): Issue => ({ url: `https://github.com/a/b/issues/${n}`, repo: 'a/b', number: n, title: 't', labels: [], createdAt: 'c', lastComment });
@@ -33,4 +33,12 @@ test('an answer from before the run last stopped never resumes it again', () => 
   const runs = new Map([run(1, 'failed', null, '2026-11-20T12:00:00Z')]);
   expect(answered([issue(1, said('nate', 'Keep the old flag.', '2026-11-20T11:00:00Z'))], runs, 'nate', new Set())).toEqual([]);
   expect(answered([issue(1, said('nate', 'Try once more.', '2026-11-20T13:00:00Z'))], runs, 'nate', new Set()).map((a) => a.answer)).toEqual(['Try once more.']);
+});
+
+test('only done runs with a PR and a worktree still on disk get checked for cleanup', () => {
+  const runs = [run(1, 'done'), run(2, 'done'), run(3, 'blocked'), run(4, 'done')].map(([, r]) => r);
+  runs[1].pr = null;
+  runs[0].pr = runs[3].pr = 'https://github.com/a/b/pull/1';
+  runs[3].worktree = 'gone';
+  expect(sweepable(runs, (p) => p !== 'gone').map((r) => r.number)).toEqual([1]);
 });

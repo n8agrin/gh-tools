@@ -37,8 +37,18 @@ async function addWorktree(s: Settings, issue: Issue, branch: string, path: stri
   const repo = s.repos[issue.repo];
   mkdirSync(join(HOME, 'worktrees'), { recursive: true });
   await run(['git', 'fetch', 'origin', repo.base], repo.checkout);
-  const cmd = repo.worktree ? repo.worktree.map((a) => fill(a, { path, branch, base: repo.base })) : ['git', 'worktree', 'add', '-b', branch, path, `origin/${repo.base}`];
+  // A branch left from an earlier run (its worktree removed after the PR closed) is checked out again, not made anew.
+  const had = await run(['git', 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], repo.checkout).then(() => true, () => false);
+  const cmd = had ? ['git', 'worktree', 'add', path, branch] : repo.worktree ? repo.worktree.map((a) => fill(a, { path, branch, base: repo.base })) : ['git', 'worktree', 'add', '-b', branch, path, `origin/${repo.base}`];
   await run(cmd, repo.checkout);
+}
+
+/** Removes a finished run's worktree once its PR has merged or closed. Plain `git worktree remove`
+ * refuses a worktree with uncommitted changes, so anything left behind stays. The branch stays too. */
+export async function removeWorktree(s: Settings, r: Run): Promise<void> {
+  const repo = s.repos[r.repo];
+  if (!repo) return;
+  await run(['git', 'worktree', 'remove', r.worktree], repo.checkout);
 }
 
 /** The claude command for a run, with the runner's own guard rails: it never pushes or opens PRs itself. */

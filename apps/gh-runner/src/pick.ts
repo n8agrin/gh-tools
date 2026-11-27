@@ -32,6 +32,11 @@ export function answered(blocked: Issue[], runs: Map<string, Run>, me: string, r
   });
 }
 
+/** Done runs whose worktree is still on disk, to check whether their PR has landed. */
+export function sweepable(runs: Run[], exists: (path: string) => boolean): Run[] {
+  return runs.filter((r) => r.state === 'done' && r.pr && exists(r.worktree));
+}
+
 /** Working issues the runner isn't running and whose process is gone, like after a restart or a sleep. */
 export function orphaned(working: Issue[], runs: Map<string, Run>, running: Set<string>, alive: (pid: number) => boolean): Issue[] {
   return working.filter((i) => {

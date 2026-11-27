@@ -107,6 +107,11 @@ export async function openDraft(repo: string, branch: string, base: string, titl
   return url;
 }
 
+/** A PR's state: OPEN, MERGED or CLOSED. */
+export async function prState(url: string): Promise<string> {
+  return (await gh(['pr', 'view', url, '--json', 'state', '--jq', '.state'])).trim();
+}
+
 /** Replaces a PR's description. */
 export async function editBody(url: string, body: string) {
   await gh(['pr', 'edit', url, '--body-file', '-'], body);
