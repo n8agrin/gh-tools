@@ -28,6 +28,8 @@ bun run stat    # gh-stat on http://localhost:4747
 bun run test    # run the tests
 ```
 
+To keep gh-review and gh-runner running on a machine that stays on, and reach them from your phone, see [Running on a home box](docs/home-box.md).
+
 gh-review needs a small config file before review runs work. [Its README](apps/gh-review/README.md#setup) walks through the setup. The iOS app is built in Xcode; see [its README](apps/gh-review-ios/README.md). The Chrome extension has no build step; see [its README](apps/gh-super-inbox/README.md#install).
 
 ## Layout

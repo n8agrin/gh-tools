@@ -1,5 +1,6 @@
 // My PRs: your own open PRs, with the same review tools as the queue but none of its state.
 // It has its own fetch, cache and set-aside list, so nothing here changes what the review queue shows.
+import { openLink } from './open.js';
 import { findStacks, groupStacks } from './stacks.js';
 
 const state = {
@@ -320,7 +321,7 @@ function openPage(p = current()) {
 
 function openGitHub(p = current()) {
   if (!p) return;
-  post('/api/open', { url: p.url });
+  openLink(p.url, post);
   say(`Opened #${p.number} on GitHub`);
 }
 

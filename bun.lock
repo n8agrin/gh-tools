@@ -8,12 +8,17 @@
     "apps/gh-review": {
       "name": "gh-review",
     },
+    "apps/gh-runner": {
+      "name": "gh-runner",
+    },
     "apps/gh-stat": {
       "name": "gh-stat",
     },
   },
   "packages": {
     "gh-review": ["gh-review@workspace:apps/gh-review"],
+
+    "gh-runner": ["gh-runner@workspace:apps/gh-runner"],
 
     "gh-stat": ["gh-stat@workspace:apps/gh-stat"],
   }

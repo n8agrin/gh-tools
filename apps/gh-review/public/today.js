@@ -1,6 +1,8 @@
 // Today: everything where you hold the ball, one row each, most-waited-on first. The server builds
 // the bands (src/today.ts); this page draws them and turns each row's one main button into a click or a key.
 
+import { isRemote, openLink } from './open.js';
+
 const state = {
   bands: [],
   counts: { waiting: 0, hunt: 0, hidden: 0 },
@@ -252,7 +254,7 @@ function openPage(r = current()) {
 
 function openGitHub(r = current()) {
   if (!r) return;
-  post('/api/open', { url: r.url });
+  openLink(r.url, post);
   say(`Opened ${ref(r)} on GitHub`);
 }
 
@@ -271,7 +273,10 @@ async function openThread(r = current()) {
   if (!r?.thread) return;
   drop(r);
   say(`Opened ${ref(r)} and marked it read`);
-  const res = await post('/api/mentions/read', { id: r.thread, open: true });
+  // From another device the page opens the link itself; the server only marks it read.
+  const here = isRemote(location.hostname);
+  if (here) window.open(r.url, '_blank', 'noopener');
+  const res = await post('/api/mentions/read', { id: r.thread, open: !here });
   if (res.error) say(res.error);
 }
 

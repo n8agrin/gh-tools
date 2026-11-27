@@ -9,7 +9,8 @@
     "dev": "bun run --cwd apps/gh-review dev",
     "queue": "bun run --cwd apps/gh-review queue",
     "demo": "bun run --cwd apps/gh-review demo",
-    "test": "bun run --filter '*' test",
+    "test": "bun run --filter '*' test && bun test bin",
+    "services": "bun bin/services.ts",
     "stat": "bun run --cwd apps/gh-stat start",
     "runner": "bun run --cwd apps/gh-runner start",
     "runner:plan": "bun run --cwd apps/gh-runner plan"
