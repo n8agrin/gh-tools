@@ -143,7 +143,11 @@ function renderList() {
     c.hunt ? `<a href="/board">${c.hunt} without a bug pass</a>` : '',
     c.hidden ? `<span>${c.hidden} set aside or done</span>` : '',
     // Agents at work aren't yours to act on yet, so they're links here, not rows: the draft PR once there is one.
-    ...(state.agents?.working ?? []).map((w) => `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(w.repo.split('/')[1])}#${w.number}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`),
+    ...(state.agents?.working ?? []).map((w) =>
+      w.stopped
+        ? `<a class="warn" href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="Its process is gone. gh-runner picks it up where it left off on its next start.">Agent on ${esc(ref(w))} stopped, start gh-runner to carry on</a>`
+        : `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(ref(w))}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`,
+    ),
   ].filter(Boolean);
   main.innerHTML = `<div class="wrap">${bands}${foot.length ? `<div class="foot">${foot.join('')}</div>` : ''}</div>`;
   main.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
