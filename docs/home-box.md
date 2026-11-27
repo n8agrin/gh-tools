@@ -36,6 +36,8 @@ That prints an `https://<box>.<tailnet>.ts.net` address that only your devices c
 
 From another device, links to GitHub open in that device's browser instead of the box's.
 
+If you put a different proxy in front, it has to pass the `Host` header through unchanged (nginx: `proxy_set_header Host $host;`). gh-review only takes a button press from a page whose address matches the `Host` it was asked for, and `tailscale serve` keeps that header. A proxy that rewrites it to `localhost:4790` makes every button answer "refused a request from …".
+
 ## What doesn't work from another device yet
 
 - Open on a Depot test box, and Run locally. Both start a tunnel or an app on the box and open it in the box's browser.
