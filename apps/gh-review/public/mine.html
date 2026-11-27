@@ -17,9 +17,12 @@
     <span class="count"><b id="count"></b><span>open</span></span>
     <label class="filter"><input id="search" placeholder="Filter your PRs" spellcheck="false" autocomplete="off" /><kbd>/</kbd></label>
     <button id="done" class="ghost" title="Mark the checked PRs done until a new commit lands  e" hidden></button>
-    <a id="board" class="ghost" href="/board" title="The same PRs as a board, one column per stage  b">Board</a>
-    <a class="ghost" href="/" title="Everything that needs you, in one list">Today</a>
-    <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+    <nav class="views" aria-label="Views">
+      <a class="ghost" href="/" title="Everything that needs you, in one list">Today</a>
+      <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+      <a class="ghost" href="/mine" title="Your own open PRs  m" aria-current="page">My PRs</a>
+      <a class="ghost" href="/board" title="Your PRs by stage  b">Board</a>
+    </nav>
     <span class="right">
       <span id="fetched"></span>
       <button id="theme" class="ghost" title="Theme  t"></button>
