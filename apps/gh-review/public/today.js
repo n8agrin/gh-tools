@@ -3,7 +3,7 @@
 
 const state = {
   bands: [],
-  counts: { waiting: 0, hunt: 0, hidden: 0 },
+  counts: { waiting: 0, hunt: 0, hidden: 0, teamMentions: 0 },
   fetchedAt: null,
   error: null,
   mentionsError: null,
@@ -142,6 +142,7 @@ function renderList() {
     c.waiting ? `<a href="/board">${plural(c.waiting, 'PR')} waiting on others</a>` : '',
     c.hunt ? `<a href="/board">${c.hunt} without a bug pass</a>` : '',
     c.hidden ? `<span>${c.hidden} set aside or done</span>` : '',
+    c.teamMentions ? `<a href="https://github.com/notifications?query=reason%3Ateam-mention" target="_blank" rel="noopener">${plural(c.teamMentions, 'team mention')} on GitHub</a>` : '',
     // Agents at work aren't yours to act on yet, so they're links here, not rows: the draft PR once there is one.
     ...(state.agents?.working ?? []).map((w) => `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(w.repo.split('/')[1])}#${w.number}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`),
   ].filter(Boolean);
