@@ -19,6 +19,7 @@ You need [Bun](https://bun.sh), the [GitHub CLI](https://cli.github.com) logged 
 - `cap`: how many issues may be working or blocked at once (default 5). Blocked ones count, since each still waits on you.
 - `pollSeconds`: how often it looks (default 60).
 - Per repo, `prompt` is the prompt file the agent gets (default `prompts/fix.md`; `prompts/deep-fix.md` runs `/nate-deep-fix-issue` then `/humanize`), and `worktree` is how to make the worktree, run in your checkout with `{path}`, `{branch}` and `{base}` filled in. For omni: `["bin/worktree-new.mts", "{path}", "origin/{base}", "-b", "{branch}"]`.
+- Per repo, `bugLabels` are the labels that make an issue a bug (default `["bug"]`). See "Bugs go red, then green".
 - `branchPrefix` (default `agent/`), `model` (passed on every run), `permissionMode` (default `auto`) and `silenceMinutes` (default 30: a run with no output that long is stopped).
 
 Only open issues **assigned to you** in those repos are picked up, oldest first.
@@ -37,6 +38,12 @@ For each issue it starts, the runner swaps `agent:ready` for `agent:working`, ma
 - **Done**: the last commits go up, the PR description gets the summary, tests, assumptions and any review findings it left (plus the same as hidden JSON for gh-review), the issue gets a comment linking the PR, and the working label comes off.
 - **Blocked**: its question as the first line of a comment, and `agent:blocked`, so it shows under Agents asking you on Today.
 - **Failed** (no result, a crash, or `silenceMinutes` of silence): whatever it committed is pushed anyway, then the reason as a comment, and `agent:blocked`.
+
+### Bugs go red, then green
+
+An issue with a bug label is a bug; anything else is a change. `bun run runner:plan` says which each one is. A bug's agent gets extra rules after your prompt: reproduce it, commit a test that fails because of it, then fix it, and hand back both runs. The PR description shows the failing output and the passing output under "Red, then green".
+
+A bug isn't done without that proof. The runner checks that the test file it names is one the branch changed, and otherwise stops the run as blocked with the reason, so you can reply and have it finish the job. A bug no test can show passes with a one-line reason instead, shown in the PR as "No failing test".
 
 ### Answering and restarts
 

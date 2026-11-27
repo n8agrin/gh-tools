@@ -17,6 +17,10 @@ export interface Result {
   tests?: { command: string; passed: boolean }[];
   /** Calls it made on its own where the issue left room. */
   assumptions?: string[];
+  /** For a bug: the test that fails without the fix and passes with it, with both runs. */
+  proof?: { test: string; command: string; red: string; green: string };
+  /** For a bug no test can show: why. */
+  noTest?: string;
 }
 
 /** The instructions every worker prompt ends with, whatever the repo's own prompt says. */

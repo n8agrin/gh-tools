@@ -9,3 +9,5 @@ Nate's local tools, one Bun workspace per app under `apps/`. Each app has its ow
 - `apps/gh-stat`: weekly GitHub PR stats board. `bun run stat` at the root runs it on port 4747.
 
 Keep apps independent. Only add a shared package under `packages/` once two apps actually need the same code.
+
+`bin/services.ts` installs gh-review and gh-runner as launchd or systemd services (`docs/home-box.md`). It only knows each app's folder and `start` script; keep it that way.

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { HOME, type Settings } from './config';
 import { comment, editBody, moveLabel, openDraft, type Issue } from './github';
 import { encodeResult, parseResult, RESULT_INSTRUCTIONS, type Result } from './result';
+import { BUG_RULES, kindOf, proofProblem } from './route';
 import { loadRun, runDir, runKey, saveRun, type Run } from './runs';
 
 /** Exported for tests: the branch an issue's work goes on. */
@@ -107,12 +108,21 @@ export function resultComment(r: Result, branch: string, pr: string | null): str
   return [pr ? `Done. ${where}` : 'Done, with nothing to commit.', '', r.summary, ...leftovers(r)].join('\n');
 }
 
+/** The last lines of a test run as a code block, with any fence in the output defused. */
+const output = (text: string) => ['```', ...text.trim().split('\n').slice(-25).map((l) => l.replace(/```/g, "'''")), '```'];
+
+/** A bug's proof for the PR description: the failing run, then the passing one, or why there is no test. */
+function proofLines(r: Result): string[] {
+  if (r.proof) return ['', '**Red, then green**', `\`${r.proof.test}\`, with \`${r.proof.command}\``, '', 'Before the fix:', ...output(r.proof.red), '', 'After the fix:', ...output(r.proof.green)];
+  return r.noTest?.trim() ? ['', `**No failing test:** ${r.noTest.trim()}`] : [];
+}
+
 /** Exported for tests: the draft PR's description, with the result hidden at the end once there is one. */
 export function prBody(issue: Pick<Issue, 'repo' | 'number'>, r: Result | null): string {
   const head = `Fixes ${issue.repo}#${issue.number}. Opened by gh-runner.`;
   if (!r) return `${head}\n\nThe agent is still working; this PR updates as it commits.`;
   const tests = r.tests?.length ? ['', '**Tests**', ...r.tests.map((t) => `- ${t.passed ? 'passed' : 'FAILED'}: \`${t.command}\``)] : [];
-  return [head, '', r.summary, ...tests, ...leftovers(r), '', encodeResult(r)].join('\n');
+  return [head, '', r.summary, ...proofLines(r), ...tests, ...leftovers(r), '', encodeResult(r)].join('\n');
 }
 
 /** Pushes new commits and opens the draft PR on the first one. Returns the PR, if there is one yet. */
@@ -156,6 +166,7 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void, 
     worktree: before?.worktree ?? join(HOME, 'worktrees', runKey(issue.repo, issue.number)),
     sessionId: begin.resume ? before!.sessionId : crypto.randomUUID(),
     pid: null, pr: before?.pr ?? null, startedAt: before?.startedAt ?? new Date().toISOString(), updatedAt: '',
+    kind: before?.kind ?? kindOf(issue.labels, s.repos[issue.repo].bugLabels),
     note: begin.resume ? 'Picking up again.' : 'Starting.',
   });
   const tag = `${issue.repo}#${issue.number}`;
@@ -164,8 +175,8 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void, 
     // With no session to go back to, it starts one with the repo's prompt and your message after it.
     const resume = begin.resume && sessionStarted(await Bun.file(join(dir, 'transcript.jsonl')).text().catch(() => ''), r.sessionId);
     const fresh = () => Bun.file(s.repos[issue.repo].prompt).text().then((t) => fill(t, { url: issue.url, repo: issue.repo, number: issue.number }));
-    const prompt = resume ? resumePrompt(begin.message) : `${await fresh()}${begin.resume ? `\n\n${begin.message.trim()}\n` : ''}${RESULT_INSTRUCTIONS}`;
-    log(`${tag}: ${resume ? 'resuming' : 'working'} in ${r.worktree}`);
+    const prompt = resume ? resumePrompt(begin.message) : `${await fresh()}${begin.resume ? `\n\n${begin.message.trim()}\n` : ''}${r.kind === 'bug' ? BUG_RULES : ''}${RESULT_INSTRUCTIONS}`;
+    log(`${tag}: ${resume ? 'resuming' : 'working'} as a ${r.kind} in ${r.worktree}`);
     // While it works, each new commit goes up, and the first one opens the draft PR, so the work is on GitHub from minute one.
     const pushed = { sha: '' };
     let syncing: Promise<void> = Promise.resolve();
@@ -187,6 +198,11 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void, 
       throw new Error(code === 0 ? 'it finished without writing a result' : `claude exited ${code}${err ? ` (${err.slice(0, 200)})` : ''}`);
     }
     const result = parseResult(await Bun.file(file).json());
+    if (r.kind === 'bug' && result.status === 'done') {
+      const changed = (await run(['git', 'diff', '--name-only', `origin/${s.repos[issue.repo].base}...HEAD`], r.worktree)).split('\n').filter(Boolean);
+      const problem = proofProblem(result, changed);
+      if (problem) throw new Error(`it called the bug fixed without showing it: ${problem}`);
+    }
     if (r.pr && result.status === 'done') await editBody(r.pr, prBody(issue, result));
     await comment(issue.url, resultComment(result, branch, r.pr));
     await moveLabel(issue, s.working, result.status === 'blocked' ? s.blocked : null, all);

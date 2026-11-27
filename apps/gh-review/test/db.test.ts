@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const home = process.env.GH_REVIEW_HOME!;
-writeFileSync(join(home, 'state.json'), JSON.stringify({ skipped: { 'https://github.com/a/b/pull/9': '2026-09-01T00:00:00Z' } }));
+// test/setup.ts writes the old state.json, since any test file may load src/db first.
 const db = await import('../src/db');
 
 test('imports set-aside PRs from the old state.json once', () => {

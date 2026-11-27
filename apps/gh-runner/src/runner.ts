@@ -6,6 +6,7 @@ import { loadConfig } from './config';
 import { existsSync } from 'node:fs';
 import { fetchQueue, moveLabel, prState, viewer, type Issue } from './github';
 import { answered, orphaned, pick, sweepable } from './pick';
+import { kindOf } from './route';
 import { listRuns } from './runs';
 import { removeWorktree, work, type Begin } from './worker';
 
@@ -54,10 +55,11 @@ async function tick() {
   if (next.length || answers.length || lost.length || dryRun) log(`${ready.length} ready, ${inFlight} of ${s.cap} in flight.`);
 
   const go = async (issue: Issue, from: string | null, begin: Begin, what: string) => {
-    if (dryRun) return log(`would ${what} ${issue.repo}#${issue.number}: ${issue.title}`);
+    const kind = runs.get(issue.url)?.kind ?? kindOf(issue.labels, s.repos[issue.repo]?.bugLabels ?? []);
+    if (dryRun) return log(`would ${what} ${issue.repo}#${issue.number} as a ${kind}: ${issue.title}`);
     // The label moves first, so the issue leaves its band on Today before any work starts.
     if (from) await moveLabel(issue, from, s.working, all);
-    log(`${what} ${issue.repo}#${issue.number}: ${issue.title}`);
+    log(`${what} ${issue.repo}#${issue.number} as a ${kind}: ${issue.title}`);
     running.set(issue.url, work(s, issue, log, begin).finally(() => running.delete(issue.url)));
   };
   for (const issue of lost) await go(issue, null, { resume: true, message: RESTARTED }, 'pick up');

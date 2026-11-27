@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { Action } from './actions';
+import type { Auto } from './auto';
 import { HOME } from './db';
 import type { RedPath } from './signal';
 
@@ -102,6 +103,8 @@ export interface Config {
   local?: Record<string, Local>;
   /** Issues you hand to an agent from Today. */
   agent?: Agent;
+  /** Review each new request as it arrives, like {"perDay": 20, "atOnce": 2}. Off without it. */
+  auto?: Auto;
 }
 
 export const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());

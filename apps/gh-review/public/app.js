@@ -1,4 +1,5 @@
 // The whole queue page. No framework: one list and a side panel, keyboard first, redrawn from `state` on every change.
+import { openLink } from './open.js';
 import { findStacks, groupStacks } from './stacks.js';
 
 const SORTS = {
@@ -598,7 +599,7 @@ function openPage(p = current()) {
 
 function open(p = current()) {
   if (!p) return;
-  post('/api/open', { url: p.url });
+  openLink(p.url, post);
   say(`Opened #${p.number} on GitHub`);
 }
 
@@ -833,7 +834,7 @@ $('#side').addEventListener('click', () => setSide(state.railSide === 'left' ? '
 $('#theme').addEventListener('click', () => setTheme(state.theme === 'dark' ? 'light' : 'dark'));
 $('#list').addEventListener('click', (e) => {
   const gh = e.target.closest('[data-open]');
-  if (gh) return e.preventDefault(), post('/api/open', { url: gh.dataset.open });
+  if (gh) return e.preventDefault(), openLink(gh.dataset.open, post);
   const r = e.target.closest('.row');
   if (!r) return;
   if (e.target.closest('[data-pick]')) return togglePick(r.dataset.url);

@@ -1,6 +1,7 @@
 // The board: your own open PRs as a kanban, one column per pipeline stage. It reads the same
 // /api/mine answer as the list, plus the stage the server worked out for each PR. Nothing here
 // drags: a stage comes from GitHub and the bug-hunt runs, so the button on a card is how it moves.
+import { openLink } from './open.js';
 import { findStacks } from './stacks.js';
 
 // Left to right in the order a PR moves. Blocked sits at the end: it's off the line until it's sorted.
@@ -307,7 +308,7 @@ function openPage(p = current()) {
 
 function openGitHub(p = current()) {
   if (!p) return;
-  post('/api/open', { url: p.url });
+  openLink(p.url, post);
   say(`Opened #${p.number} on GitHub`);
 }
 

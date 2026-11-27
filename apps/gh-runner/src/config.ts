@@ -22,6 +22,8 @@ export interface Repo {
   /** The prompt file the agent gets, with {url}, {repo} and {number} filled in. Relative paths are
    * from this app's folder. Default prompts/fix.md. */
   prompt?: string;
+  /** Labels that mark an issue as a bug, which then has to go red then green. Default ["bug"]. */
+  bugLabels?: string[];
 }
 
 export interface Config {
@@ -57,7 +59,7 @@ export function settle(c: Config): Settings {
       if (!/^[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`"${name}" is not owner/repo.`);
       if (!r?.checkout) throw new Error(`${name} has no checkout.`);
       const prompt = expand(r.prompt ?? 'prompts/fix.md');
-      return [name, { checkout: expand(r.checkout), base: r.base ?? 'main', worktree: r.worktree ?? null, prompt: isAbsolute(prompt) ? prompt : join(ROOT, prompt) }];
+      return [name, { checkout: expand(r.checkout), base: r.base ?? 'main', worktree: r.worktree ?? null, prompt: isAbsolute(prompt) ? prompt : join(ROOT, prompt), bugLabels: r.bugLabels ?? ['bug'] }];
     }),
   );
   return {

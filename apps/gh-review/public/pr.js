@@ -1,5 +1,6 @@
 // The page for one PR, laid out as PR Page v3: a checklist of what to read on the left, and on the right
 // either the brief (risk, description, how it works, taste questions), one file with its notes and diff, or a finish screen.
+import { openLink } from './open.js';
 import { inline, markdown } from './md.js';
 import { initChat } from './chat.js';
 import { findStacks } from './stacks.js';
@@ -1902,7 +1903,7 @@ async function setColor(color) {
 }
 
 // o opens the file you're on, or the PR from anywhere else.
-const openGitHub = () => post('/api/open', { url: state.cur === 'brief' || state.cur === 'done' ? url : fileUrl(state.cur) });
+const openGitHub = () => openLink(state.cur === 'brief' || state.cur === 'done' ? url : fileUrl(state.cur), post);
 const askHere = () => (state.cur !== 'brief' && state.cur !== 'done' && !window.getSelection()?.toString().trim() ? chat.open(`About ${state.cur}: `) : chat.open());
 
 function toggleMd() {
@@ -2047,7 +2048,7 @@ document.addEventListener('keydown', (e) => {
 const pending = sessionStorage.getItem('toast');
 status(pending ?? 'Read the brief first, then work down the list');
 if (pending) sessionStorage.removeItem('toast');
-$('#github').addEventListener('click', (e) => (e.preventDefault(), post('/api/open', { url })));
+$('#github').addEventListener('click', (e) => (e.preventDefault(), openLink(url, post)));
 $('#theme').addEventListener('click', toggleTheme);
 drawTheme();
 $('#font').addEventListener('click', nextFont);

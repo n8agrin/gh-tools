@@ -261,6 +261,12 @@ export function finishReview(id: number, status: Review['status'], error?: strin
   open().run('UPDATE reviews SET status = ?, ended_at = ?, error = ? WHERE id = ?', [status, new Date().toISOString(), error ?? null, id]);
 }
 
+/** Every run's PR and head, and how many are running now, for deciding what still needs a review. */
+export function reviewHeads(): { heads: { url: string; headSha: string }[]; running: number } {
+  const rows = open().query<{ pr_url: string; head_sha: string; status: string }, []>('SELECT pr_url, head_sha, status FROM reviews').all();
+  return { heads: rows.map((r) => ({ url: r.pr_url, headSha: r.head_sha })), running: rows.filter((r) => r.status === 'running').length };
+}
+
 /** Every review of a PR, newest first, with its steps. */
 export function listReviews(prUrl: string): Review[] {
   const d = open();
