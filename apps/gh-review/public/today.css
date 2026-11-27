@@ -1,8 +1,6 @@
 /* Today: one list of what needs you, in bands, one main button per row. Colors and type come from queue.css. */
 .today main { order: 0; flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .today .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 24px; }
-.views { display: flex; gap: 4px; }
-.views a[aria-current="page"] { color: var(--strong); background: var(--sel); }
 header .needs { display: flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
 header .needs span { display: flex; align-items: baseline; gap: 5px; padding: 3px 8px; font-size: 12px; color: var(--muted); }
 header .needs b { font-weight: 600; color: var(--strong); }
@@ -42,6 +40,7 @@ header .needs:empty { display: none; }
 .dot.green { background: var(--green); } .dot.amber { background: var(--amber); }
 .foot { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .foot a { text-decoration: underline; text-underline-offset: 2px; }
+.foot a.warn { color: var(--amber); }
 .today .empty { padding: 40px 0; text-align: center; color: var(--muted); }
 
 @media (max-width: 760px) {

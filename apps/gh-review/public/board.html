@@ -18,9 +18,12 @@
     <span class="count"><b id="count"></b><span>open</span></span>
     <label class="filter"><input id="search" placeholder="Filter your PRs" spellcheck="false" autocomplete="off" /><kbd>/</kbd></label>
     <span id="needs" class="needs"></span>
-    <a class="ghost" href="/mine" title="The same PRs as a list  v">List</a>
-    <a class="ghost" href="/" title="Everything that needs you, in one list">Today</a>
-    <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+    <nav class="views" aria-label="Views">
+      <a class="ghost" href="/" title="Everything that needs you, in one list">Today</a>
+      <a class="ghost" href="/queue" title="The PRs waiting on your review  q">Review queue</a>
+      <a class="ghost" href="/mine" title="Your own open PRs  m">My PRs</a>
+      <a class="ghost" href="/board" title="Your PRs by stage  b" aria-current="page">Board</a>
+    </nav>
     <span class="right">
       <span id="fetched"></span>
       <button id="theme" class="ghost" title="Theme  t"></button>

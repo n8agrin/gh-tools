@@ -64,8 +64,15 @@ export async function fetchQueue(repos: string[], labels: { ready: string; worki
 }
 
 let me: Promise<string> | null = null;
-/** Your GitHub login. Only your own comments ever reach an agent. */
-export const viewer = () => (me ??= gh(['api', 'user', '--jq', '.login']).then((o) => o.trim()));
+/** Your GitHub login. Only your own comments ever reach an agent. A failed lookup isn't kept, so the next tick asks again. */
+export const viewer = () =>
+  (me ??= gh(['api', 'user', '--jq', '.login']).then(
+    (o) => o.trim(),
+    (e) => {
+      me = null;
+      throw e;
+    },
+  ));
 
 /** Marks every comment the runner writes, so it can tell your replies from its own (both are you on GitHub). */
 export const MARK = '<!-- gh-runner -->';
@@ -98,6 +105,11 @@ export async function openDraft(repo: string, branch: string, base: string, titl
   const url = out.trim().split('\n').pop() ?? '';
   if (!/^https:\/\/github\.com\/.+\/pull\/\d+$/.test(url)) throw new Error(`gh pr create said: ${out.trim().slice(0, 200)}`);
   return url;
+}
+
+/** A PR's state: OPEN, MERGED or CLOSED. */
+export async function prState(url: string): Promise<string> {
+  return (await gh(['pr', 'view', url, '--json', 'state', '--jq', '.state'])).trim();
 }
 
 /** Replaces a PR's description. */
