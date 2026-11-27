@@ -40,6 +40,7 @@ header .needs:empty { display: none; }
 .dot.green { background: var(--green); } .dot.amber { background: var(--amber); }
 .foot { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .foot a { text-decoration: underline; text-underline-offset: 2px; }
+.foot a.warn { color: var(--amber); }
 .today .empty { padding: 40px 0; text-align: center; color: var(--muted); }
 
 @media (max-width: 760px) {

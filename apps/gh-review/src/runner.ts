@@ -14,16 +14,29 @@ export interface AgentRun {
   startedAt: string;
   /** When the run last changed state. */
   updatedAt: string;
+  /** Its claude process is gone, so gh-runner isn't running: the run waits for the runner's next start. */
+  stopped: boolean;
 }
 
-/** The runs in `dir` still working. A file that doesn't parse is skipped, since the runner may be mid-write. */
-export async function workingRuns(dir: string): Promise<AgentRun[]> {
+const isAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM means the process exists but belongs to someone else.
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+};
+
+/** The runs in `dir` still working. A file that doesn't parse is skipped, since the runner may be mid-write. The
+ * status files are on this machine, so their pids can be checked here. */
+export async function workingRuns(dir: string, alive = isAlive): Promise<AgentRun[]> {
   if (!existsSync(dir)) return [];
   const runs = await Promise.all(
     readdirSync(dir).map(async (d) => {
       try {
         const r = await Bun.file(join(dir, d, 'run.json')).json();
-        return r?.state === 'working' && typeof r.url === 'string' ? { url: r.url, repo: r.repo, number: r.number, title: r.title ?? '', pr: r.pr ?? null, startedAt: r.startedAt, updatedAt: r.updatedAt } : null;
+        return r?.state === 'working' && typeof r.url === 'string' ? { url: r.url, repo: r.repo, number: r.number, title: r.title ?? '', pr: r.pr ?? null, startedAt: r.startedAt, updatedAt: r.updatedAt, stopped: typeof r.pid === 'number' && !alive(r.pid) } : null;
       } catch {
         return null;
       }
