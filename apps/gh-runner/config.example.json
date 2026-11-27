@@ -1,0 +1,9 @@
+{
+  "repos": {
+    "owner/repo": {
+      "checkout": "~/src/repo"
+    }
+  },
+  "cap": 5,
+  "pollSeconds": 60
+}

@@ -3,6 +3,7 @@
 import type { ReviewSummary } from './db';
 import type { AgentIssue, Mention, MyPR, ReviewPR } from './github';
 import { LANE_NAME, type Lane } from './lane';
+import type { AgentRun } from './runner';
 import type { Stage } from './stage';
 
 /** What a row's main button does. The page maps each one to a click or a key. */
@@ -47,7 +48,7 @@ export interface Today {
   /** Not rows, just counts: your PRs waiting on others, ones with no bug pass yet, and rows you set aside or marked done. */
   counts: { waiting: number; hunt: number; hidden: number };
   /** Issues queued for or held by an agent, against the cap, when your config hands issues to one. */
-  agents: { inFlight: number; cap: number } | null;
+  agents: { inFlight: number; cap: number; working: AgentRun[] } | null;
 }
 
 export interface TodayInput {
@@ -65,7 +66,7 @@ export interface TodayInput {
   /** Unread notifications that want you. */
   mentions?: Mention[];
   /** Your issues in the agent repos, when your config has an agent. */
-  agents?: { ready: AgentIssue[]; asking: AgentIssue[]; inFlight: number; cap: number };
+  agents?: { ready: AgentIssue[]; asking: AgentIssue[]; inFlight: number; cap: number; working?: AgentRun[] };
 }
 
 /** Your own PRs that need you, in the order to take them: the closest to landing first. */
@@ -147,7 +148,7 @@ export function buildToday(i: TodayInput): Today {
       { key: 'mentions', label: 'Mentions and replies', rows: mentions },
       ...(i.agents ? [{ key: 'start' as const, label: 'Ready to start', rows: start }] : []),
     ],
-    agents: i.agents ? { inFlight: i.agents.inFlight, cap: i.agents.cap } : null,
+    agents: i.agents ? { inFlight: i.agents.inFlight, cap: i.agents.cap, working: i.agents.working ?? [] } : null,
     counts: {
       waiting: open.filter((p) => stage(p)?.key === 'waiting').length,
       hunt: open.filter((p) => stage(p)?.key === 'hunt').length,

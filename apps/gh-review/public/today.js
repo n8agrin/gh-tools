@@ -142,6 +142,8 @@ function renderList() {
     c.waiting ? `<a href="/board">${plural(c.waiting, 'PR')} waiting on others</a>` : '',
     c.hunt ? `<a href="/board">${c.hunt} without a bug pass</a>` : '',
     c.hidden ? `<span>${c.hidden} set aside or done</span>` : '',
+    // Agents at work aren't yours to act on yet, so they're links here, not rows: the draft PR once there is one.
+    ...(state.agents?.working ?? []).map((w) => `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(w.repo.split('/')[1])}#${w.number}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`),
   ].filter(Boolean);
   main.innerHTML = `<div class="wrap">${bands}${foot.length ? `<div class="foot">${foot.join('')}</div>` : ''}</div>`;
   main.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
@@ -341,7 +343,7 @@ async function startAgent(r = current()) {
   const res = await post('/api/agent/start', { url: r.url });
   if (res.error) return say(res.error);
   drop(r);
-  state.agents = { inFlight: res.inFlight, cap: res.cap };
+  state.agents = { ...state.agents, inFlight: res.inFlight, cap: res.cap };
   say(`Handed ${ref(r)} to the agent. ${res.inFlight} of ${res.cap} slots in use.`);
 }
 

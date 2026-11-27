@@ -10,6 +10,8 @@
     "queue": "bun run --cwd apps/gh-review queue",
     "demo": "bun run --cwd apps/gh-review demo",
     "test": "bun run --filter '*' test",
-    "stat": "bun run --cwd apps/gh-stat start"
+    "stat": "bun run --cwd apps/gh-stat start",
+    "runner": "bun run --cwd apps/gh-runner start",
+    "runner:plan": "bun run --cwd apps/gh-runner plan"
   }
 }
