@@ -38,8 +38,18 @@ async function addWorktree(s: Settings, issue: Issue, branch: string, path: stri
   const repo = s.repos[issue.repo];
   mkdirSync(join(HOME, 'worktrees'), { recursive: true });
   await run(['git', 'fetch', 'origin', repo.base], repo.checkout);
-  const cmd = repo.worktree ? repo.worktree.map((a) => fill(a, { path, branch, base: repo.base })) : ['git', 'worktree', 'add', '-b', branch, path, `origin/${repo.base}`];
+  // A branch left from an earlier run (its worktree removed after the PR closed) is checked out again, not made anew.
+  const had = await run(['git', 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], repo.checkout).then(() => true, () => false);
+  const cmd = had ? ['git', 'worktree', 'add', path, branch] : repo.worktree ? repo.worktree.map((a) => fill(a, { path, branch, base: repo.base })) : ['git', 'worktree', 'add', '-b', branch, path, `origin/${repo.base}`];
   await run(cmd, repo.checkout);
+}
+
+/** Removes a finished run's worktree once its PR has merged or closed. Plain `git worktree remove`
+ * refuses a worktree with uncommitted changes, so anything left behind stays. The branch stays too. */
+export async function removeWorktree(s: Settings, r: Run): Promise<void> {
+  const repo = s.repos[r.repo];
+  if (!repo) return;
+  await run(['git', 'worktree', 'remove', r.worktree], repo.checkout);
 }
 
 /** The claude command for a run, with the runner's own guard rails: it never pushes or opens PRs itself. */
@@ -134,6 +144,11 @@ export type Begin = { resume: false } | { resume: true; message: string };
 /** The message a resumed session gets: your answer, or a note that the runner restarted. */
 export const resumePrompt = (message: string) => `${message.trim()}\n${RESULT_INSTRUCTIONS}`;
 
+/** Exported for tests: whether Claude ever started this session, read off the transcript's init lines. A run that
+ * failed before that (a bad worktree, claude not found) has nothing to resume, and `--resume` would fail every time. */
+export const sessionStarted = (transcript: string, sessionId: string) =>
+  transcript.split('\n').some((l) => l.includes('"subtype":"init"') && l.includes(`"session_id":"${sessionId}"`));
+
 /**
  * Works one issue that the runner has already labeled working. Never throws: a failure becomes a
  * blocked issue with the reason. A fresh start on an issue that ran before keeps its branch,
@@ -157,8 +172,11 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void, 
   const tag = `${issue.repo}#${issue.number}`;
   try {
     await makeWorktree(s, issue, branch, r.worktree);
-    const prompt = begin.resume ? resumePrompt(begin.message) : fill(await Bun.file(s.repos[issue.repo].prompt).text(), { url: issue.url, repo: issue.repo, number: issue.number }) + (r.kind === 'bug' ? BUG_RULES : '') + RESULT_INSTRUCTIONS;
-    log(`${tag}: ${begin.resume ? 'resuming' : 'working'} as a ${r.kind} in ${r.worktree}`);
+    // With no session to go back to, it starts one with the repo's prompt and your message after it.
+    const resume = begin.resume && sessionStarted(await Bun.file(join(dir, 'transcript.jsonl')).text().catch(() => ''), r.sessionId);
+    const fresh = () => Bun.file(s.repos[issue.repo].prompt).text().then((t) => fill(t, { url: issue.url, repo: issue.repo, number: issue.number }));
+    const prompt = resume ? resumePrompt(begin.message) : `${await fresh()}${begin.resume ? `\n\n${begin.message.trim()}\n` : ''}${r.kind === 'bug' ? BUG_RULES : ''}${RESULT_INSTRUCTIONS}`;
+    log(`${tag}: ${resume ? 'resuming' : 'working'} as a ${r.kind} in ${r.worktree}`);
     // While it works, each new commit goes up, and the first one opens the draft PR, so the work is on GitHub from minute one.
     const pushed = { sha: '' };
     let syncing: Promise<void> = Promise.resolve();
@@ -171,7 +189,7 @@ export async function work(s: Settings, issue: Issue, log: (m: string) => void, 
         }
       }).catch((e) => log(`${tag}: push failed, ${(e as Error).message}`)));
     const timer = setInterval(push, 60_000);
-    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId, begin.resume), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' }))).finally(() => clearInterval(timer));
+    const { code, quiet } = await runClaude(s, claudeArgs(s, prompt, r.sessionId, resume), r.worktree, dir, (pid) => (r = saveRun({ ...r, pid, note: 'Working.' }))).finally(() => clearInterval(timer));
     await push();
     if (quiet) throw new Error(`no output for ${s.silenceMinutes} minutes, so it was stopped`);
     const file = join(dir, 'result.json');

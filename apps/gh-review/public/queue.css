@@ -49,6 +49,9 @@ header {
 .seg[hidden] { display: none; }
 .ghost { font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
 .ghost[aria-pressed="true"] { color: var(--strong); background: var(--sel); }
+/* The same four views on every page, the current one marked. */
+.views { display: flex; gap: 4px; }
+.views a[aria-current="page"] { color: var(--strong); background: var(--sel); }
 .right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--muted); }
 #fetched.stale { color: var(--amber); }
 /* Refreshing gets a sliding bar under the header and a spinner, so you can tell it's working. */
