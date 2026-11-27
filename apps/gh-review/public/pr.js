@@ -291,9 +291,12 @@ function fileItems(steps) {
   // Files the brief found applying one mechanical edit, with no outliers, read as routine.
   const pattern = new Set((b?.groups ?? []).filter((x) => x.kind === 'pattern').flatMap((x) => x.files.filter((f) => !x.outliers.includes(f))));
   const sizes = Object.fromEntries((state.pr?.files ?? []).map((f) => [f.path, f]));
-  const seen = new Set(g.files.map((f) => f.file));
-  // Files the guide left out still show, so nothing changed goes unlisted.
-  const all = [...g.files, ...(state.pr?.files ?? []).filter((f) => !seen.has(f.path)).map((f) => ({ file: f.path, color: 'yellow', note: '', routine: true }))];
+  // After new commits the guide can name files the PR no longer has, like a renamed migration folder, and those can't open.
+  const guided = state.pr ? g.files.filter((f) => sizes[f.file]) : g.files;
+  const seen = new Set(guided.map((f) => f.file));
+  // Files the guide left out still show, so nothing changed goes unlisted. Files new since the run aren't routine, the guide just never saw them.
+  const stale = !!state.pr && shownRun()?.headSha !== state.pr.headSha;
+  const all = [...guided, ...(state.pr?.files ?? []).filter((f) => !seen.has(f.path)).map((f) => ({ file: f.path, color: 'yellow', note: '', routine: !stale }))];
   const found = {};
   for (const x of doneOutput(steps, 'check')?.findings ?? []) if ((RANK[x.color] ?? 0) > (RANK[found[x.file]] ?? -1)) found[x.file] = x.color;
   const items = all.map((f) => {
