@@ -5,6 +5,7 @@ Local review queue for PRs where someone asked for your review. Anyone should be
 - GitHub access goes through `fetchQueue()` in `src/github.ts`. Don't call `gh` from elsewhere.
 - Local storage is `src/db.ts` (bun:sqlite, `~/.gh-review/gh-review.db`). The PR table is only a cache of the last fetch; GitHub stays the source of truth.
 - Never write to a PR (review, comment, label) without an explicit key press or click from the user.
+- Every POST goes through `refusePost()` (`src/origin.ts`): JSON bodies only, from the server's own origin, so another website open in your browser can't post to it. Pages post with `content-type: application/json`.
 - Settings live in `~/.gh-review/config.json` (read by `src/config.ts`), not in the repo. `config.example.json` is the starting point and the fallback, so keep it free of anyone's own repos or skills.
 - Per-PR Claude work belongs in the config's `actions`, or its `checks` plus `prompts/` for Run review, not in the server.
 - Review runs are read-only against GitHub. Keep `bin/readonly/` first on their PATH and the write tools denied.

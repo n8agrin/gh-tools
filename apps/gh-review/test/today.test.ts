@@ -69,7 +69,7 @@ test('your PRs that need you come closest-to-landing first; the rest are counts'
   expect(urls(move)).toEqual([4, 3, 5, 2, 1]);
   expect(move.map((r) => r.tag)).toEqual(['SHIP', 'SHIP', 'UNDRAFT', 'FINDINGS', 'BLOCKED']);
   expect(move[3]).toMatchObject({ next: 'findings', findings: 2, mine: true });
-  expect(t.counts).toEqual({ waiting: 1, hunt: 1, hidden: 1 });
+  expect(t.counts).toEqual({ waiting: 1, hunt: 1, hidden: 1, teamMentions: 0 });
 });
 
 test('mentions come oldest first, and a mention on a PR already above gets no second row', async () => {
@@ -83,10 +83,11 @@ test('mentions come oldest first, and a mention on a PR already above gets no se
   expect(mentions[2].url).toBe('https://github.com/acme/docs');
 
   const queue = [pr(63120, { url: 'https://github.com/acme/app/pull/63120', repo: 'acme/app' })];
-  const rows = buildToday(input({ queue, mentions })).bands[2].rows;
-  expect(rows.map((r) => r.thread)).toEqual(['105', '102']);
-  expect(rows[0]).toMatchObject({ number: null, tag: 'MENTION', next: 'thread', why: 'A team of yours was @-mentioned.' });
-  expect(rows[1]).toMatchObject({ number: 63140, why: "New comments on a thread you're in." });
+  const t = buildToday(input({ queue, mentions }));
+  // A team mention is only counted, since a busy team's would bury the rest.
+  expect(t.bands[2].rows.map((r) => r.thread)).toEqual(['102']);
+  expect(t.bands[2].rows[0]).toMatchObject({ number: 63140, tag: 'MENTION', next: 'thread', why: "New comments on a thread you're in." });
+  expect(t.counts.teamMentions).toBe(1);
 });
 
 test("an agent's question comes before mentions, and issues to start come last", async () => {
@@ -99,7 +100,15 @@ test("an agent's question comes before mentions, and issues to start come last",
   expect(asking).toMatchObject({ tag: 'AGENT', next: 'answer', number: 3, why: '@agent-bot: Should the cache live in sqlite or memory?', since: '2026-11-15T09:00:00Z' });
   expect(t.bands[3].rows).toEqual([]);
   expect(t.bands[4].rows.map((r) => [r.number, r.tag, r.next])).toEqual([[7, 'ISSUE', 'start'], [9, 'ISSUE', 'start']]);
-  expect(t.agents).toEqual({ inFlight: 2, cap: 5, working: [] });
+  expect(t.agents).toEqual({ inFlight: 2, cap: 5, working: [], answered: [] });
   // Without an agent in your config there are no agent bands.
   expect(buildToday(input()).bands.map((b) => b.key)).toEqual(['review', 'move', 'mentions']);
+});
+
+test('a question gh-runner asked reads plainly, and your answer takes it off the band', () => {
+  const issue = (n: number, author: string, body: string) => ({ url: `https://github.com/a/b/issues/${n}`, repo: 'a/b', number: n, title: `Issue ${n}`, labels: ['agent:blocked'], updatedAt: '2026-11-15T00:00:00Z', lastComment: { author, body, at: '2026-11-15T09:00:00Z', url: '' } });
+  const asking = [issue(1, 'me', '**Question:** Which flag?\n\nMore.\n\n<!-- gh-runner -->\n'), issue(2, 'me', 'The old one.'), issue(3, 'pat', 'What about tests?')];
+  const t = buildToday(input({ agents: { ready: [], asking, inFlight: 3, cap: 5 } as any }));
+  expect(t.bands.find((b) => b.key === 'agents')!.rows.map((r) => [r.number, r.why])).toEqual([[1, 'Question: Which flag?'], [3, '@pat: What about tests?']]);
+  expect(t.agents!.answered).toEqual([{ url: 'https://github.com/a/b/issues/2', repo: 'a/b', number: 2, title: 'Issue 2' }]);
 });

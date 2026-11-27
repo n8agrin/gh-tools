@@ -441,6 +441,7 @@ function allKeys() {
     [['t'], 'Switch between dark and light'],
     [['[', ']'], 'Move the panel left or right'],
     [['m'], 'Go to My PRs, your own open PRs in a list of their own'],
+    [['b'], 'Go to the board, your own PRs by stage'],
     [['r'], 'Refresh from GitHub'],
     [['?'], 'Show or hide this list'],
   ];
@@ -799,6 +800,7 @@ document.addEventListener('keydown', (e) => {
     u: () => undo(),
     r: () => load(),
     m: () => (location.href = '/mine'),
+    b: () => (location.href = '/board'),
     s: () => {
       const ks = Object.keys(SORTS);
       setSort(ks[(ks.indexOf(state.sort) + 1) % ks.length]);
