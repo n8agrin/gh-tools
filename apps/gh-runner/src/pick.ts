@@ -16,14 +16,17 @@ export function pick(ready: Issue[], inFlight: number, cap: number, running: Set
 
 /**
  * Blocked issues you've answered: the runner has a session for them and the newest comment is
- * yours, not the runner's. Only your login counts, since anyone who can comment on the issue
- * could otherwise steer the agent.
+ * yours, not the runner's, and came after the run last stopped. Only your login counts, since
+ * anyone who can comment on the issue could otherwise steer the agent. The time check matters when
+ * the runner's own comment failed to post: your old answer is still the newest, and it would
+ * otherwise resume the agent with it on every tick.
  */
 export function answered(blocked: Issue[], runs: Map<string, Run>, me: string, running: Set<string>): { issue: Issue; answer: string }[] {
   return blocked.flatMap((issue) => {
     const c = issue.lastComment;
     const run = runs.get(issue.url);
     if (!c || !run || running.has(issue.url) || c.author !== me || c.body.includes(MARK)) return [];
+    if (Date.parse(c.at) <= Date.parse(run.updatedAt)) return [];
     if (run.state !== 'blocked' && run.state !== 'failed') return [];
     return [{ issue, answer: c.body }];
   });

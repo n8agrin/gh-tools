@@ -3,7 +3,7 @@
 
 const state = {
   bands: [],
-  counts: { waiting: 0, hunt: 0, hidden: 0 },
+  counts: { waiting: 0, hunt: 0, hidden: 0, teamMentions: 0 },
   fetchedAt: null,
   error: null,
   mentionsError: null,
@@ -142,12 +142,16 @@ function renderList() {
     c.waiting ? `<a href="/board">${plural(c.waiting, 'PR')} waiting on others</a>` : '',
     c.hunt ? `<a href="/board">${c.hunt} without a bug pass</a>` : '',
     c.hidden ? `<span>${c.hidden} set aside or done</span>` : '',
+    c.teamMentions ? `<a href="https://github.com/notifications?query=reason%3Ateam-mention" target="_blank" rel="noopener">${plural(c.teamMentions, 'team mention')} on GitHub</a>` : '',
     // Agents at work aren't yours to act on yet, so they're links here, not rows: the draft PR once there is one.
     ...(state.agents?.working ?? []).map((w) => `<a href="${esc(w.pr ?? w.url)}" target="_blank" rel="noopener" title="${esc(w.title)}">Agent on ${esc(w.repo.split('/')[1])}#${w.number}, ${age(w.startedAt)}${w.pr ? ', draft PR' : ''}</a>`),
+    ...(state.agents?.answered ?? []).map((a) => `<a href="${esc(a.url)}" target="_blank" rel="noopener" title="${esc(a.title)}">You answered ${esc(ref(a))}, the agent picks it up next</a>`),
   ].filter(Boolean);
   main.innerHTML = `<div class="wrap">${bands}${foot.length ? `<div class="foot">${foot.join('')}</div>` : ''}</div>`;
-  main.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
+
+/** Scrolls the selected row into view. Only moving the selection does this, so a refresh never yanks the page back while you scroll. */
+const reveal = () => $('#today [aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 
 const KEYS = [
   [['j', '↓'], 'Next row'],
@@ -213,7 +217,7 @@ async function load() {
   state.loading = true;
   render();
   try {
-    if (!state.bands.length) apply(await fetch('/api/today?cached=1').then((r) => r.json())), render();
+    if (!state.bands.length) apply(await fetch('/api/today?cached=1').then((r) => r.json())), render(), reveal();
     const res = await fetch('/api/today').then((r) => r.json());
     if (res.bands) apply(res);
     else state.error = res.error;
@@ -232,6 +236,7 @@ function move(delta) {
   state.selected = next.key;
   sessionStorage.setItem('todaySelected', next.key);
   render();
+  reveal();
 }
 
 /** Takes a row off the page right away, for actions that settle it. The next refresh has the truth. */

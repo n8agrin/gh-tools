@@ -10,6 +10,7 @@ import { agentLabels, CONFIG, configFile, EXAMPLE, loadConfig, noCheckout, pageC
 import { allChecks, listReviews, optionalChecks, startReview, stopReview } from './review';
 import { stagesFor } from './stage';
 import { buildToday } from './today';
+import { refusePost } from './origin';
 import { workingRuns } from './runner';
 import { localSlot, releaseSlot, slotBlockers, takeSlot } from './local';
 import { openCommand, sessionState, startTunnel, stopTunnel, tunnelRunning } from './session';
@@ -203,6 +204,8 @@ const server = Bun.serve({
       }
       if (pathname === '/api/chat' && req.method === 'GET') return json(chatState(new URL(req.url).searchParams.get('url') ?? ''));
       if (req.method === 'POST') {
+        const refused = refusePost(req.headers);
+        if (refused) return json({ error: refused }, 403);
         const body = await req.json();
         if (pathname === '/api/open') {
           if (!/^https:\/\/github\.com\//.test(body.url)) return json({ error: 'not a GitHub URL' }, 400);
